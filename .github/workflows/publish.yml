@@ -80,7 +80,7 @@ jobs:
           # last version is the highest of the two, so two releases waiting for approval never
           # take the same number.
           current=$(npm view "$name" version)
-          tagged=$(git tag -l 'v*' | sed 's/^v//' | grep -v -- '-' | sort -V | tail -1)
+          tagged=$(git tag -l 'v*' | sed 's/^v//' | { grep -v -- '-' || true; } | sort -V | tail -1)
           if [ -n "$tagged" ] && [ "$(printf '%s\n%s\n' "$current" "$tagged" | sort -V | tail -1)" = "$tagged" ]; then current=$tagged; fi
           echo "last version: $name@$current"
 
