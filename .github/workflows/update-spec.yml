@@ -1,0 +1,83 @@
+# Opens (or refreshes) one pull request that brings openapi.json up to the spec reduck.ai serves.
+#
+# A repository_dispatch "openapi-published" is sent once a release of the API is live; the daily
+# schedule catches a release whose dispatch did not arrive. Merging the pull
+# request releases the package (publish.yml).
+#
+# A pull request opened with GITHUB_TOKEN starts no workflow, so this job runs the checks itself
+# before it opens one: a pull request it opens has built and passed its tests. It needs "Allow
+# GitHub Actions to create and approve pull requests" in the organization's Actions settings.
+
+name: Update spec
+
+on:
+  repository_dispatch:
+    types: [openapi-published]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: update-spec
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
+        with:
+          install: false
+          node-version-file: false
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fetch the published spec
+        id: spec
+        run: |
+          cp openapi.json "$RUNNER_TEMP/previous.json"
+          echo "status=$(node scripts/update-spec.mjs | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Check and test against it
+        if: steps.spec.outputs.status == 'changed'
+        run: pnpm check && pnpm test
+
+      # oasdiff lists what a client written against the previous spec would trip on. The list goes
+      # into the pull request so the reviewer sees it; publish.yml runs the same check to choose
+      # a major version.
+      - name: Breaking changes
+        if: steps.spec.outputs.status == 'changed'
+        run: |
+          docker run --rm -v "$RUNNER_TEMP:/old" -v "$PWD:/new" tufin/oasdiff:v1.39.0 \
+            breaking /old/previous.json /new/openapi.json --format text > "$RUNNER_TEMP/breaking.txt" || true
+          {
+            echo 'The spec served at https://reduck.ai/api/openapi.json changed. Merging this releases the package.'
+            echo
+            if [ -s "$RUNNER_TEMP/breaking.txt" ]; then
+              echo '### Breaking changes: the release will be a major version'
+              echo; echo '```'; cat "$RUNNER_TEMP/breaking.txt"; echo '```'
+            else
+              echo 'No breaking change: the release will be a minor version.'
+            fi
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Open the pull request
+        if: steps.spec.outputs.status == 'changed'
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          branch: update-spec
+          commit-message: 'feat: update the API spec'
+          title: 'feat: update the API spec'
+          body-path: ${{ runner.temp }}/body.md
+          add-paths: openapi.json
+          delete-branch: true

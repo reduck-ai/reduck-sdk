@@ -1,0 +1,79 @@
+# Publishes a prerelease under the npm tag `next` for each push to the branch staging.
+#
+# Nobody edits staging by hand: it is main plus one commit that replaces openapi.json with the
+# spec of the API's next release. So `next` holds the routes that are not in production yet.
+#
+# The version is the next stable one with a counter: x.y.z-next.N. x.y.z is the version npm holds,
+# increased as publish.yml would increase it for this spec (major for a breaking change against
+# the spec of main, minor for another change, patch for none), and N follows the prereleases of
+# x.y.z that npm already holds.
+#
+# npm trusts this workflow by its file name: it needs a Trusted Publisher of its own on npmjs.com.
+
+name: Publish next
+
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: publish-next
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      # The tag v<version>.
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
+        with:
+          install: false
+          node-version-file: false
+      - run: pnpm install --frozen-lockfile
+
+      - name: Choose the version
+        id: version
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name package.json)
+          stable=$(npm view "$name" version)
+          git show origin/main:openapi.json > "$RUNNER_TEMP/main.json"
+          if cmp -s "$RUNNER_TEMP/main.json" openapi.json; then
+            increment=patch
+          elif docker run --rm -v "$RUNNER_TEMP:/old" -v "$PWD:/new" tufin/oasdiff:v1.39.0 \
+              breaking /old/main.json /new/openapi.json --fail-on ERR; then
+            increment=minor
+          else
+            increment=major
+          fi
+          base=$(npx -y semver@7.7.3 -i "$increment" "$stable")
+          n=$(npm view "$name" versions --json | jq --arg p "$base-next." '[.[] | select(startswith($p))] | length')
+          next="$base-next.$((n + 1))"
+          echo "$stable -> $next ($increment against main)"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm check && pnpm test
+
+      - name: Publish
+        env:
+          VERSION: ${{ steps.version.outputs.next }}
+        run: |
+          set -euo pipefail
+          npm version "$VERSION" --no-git-tag-version
+          npm publish --provenance --access public --tag next
+          git tag "v$VERSION"
+          git push origin "v$VERSION"

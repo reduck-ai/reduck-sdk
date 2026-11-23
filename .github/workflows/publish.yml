@@ -1,0 +1,121 @@
+# Releases the package on every push to main that changes what it ships, then publishes it to npm
+# with provenance. The version is the one npm holds, increased:
+#   - major when oasdiff finds a breaking change between the spec of that version and this one,
+#   - minor when the spec changed otherwise,
+#   - patch for anything else.
+# Run it by hand (Actions > Publish > Run workflow) to choose the increment, for example a major
+# version for a breaking change in src/client.ts.
+#
+# The version is never committed: npm and the tag v<version> hold it. package.json keeps 0.0.0.
+#
+# npm trusts this workflow by its file name (Trusted Publishing, OIDC; no NPM_TOKEN): renaming
+# publish.yml stops publishing until the package's Trusted Publisher on npmjs.com is updated.
+
+name: Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'openapi.json'
+      - 'openapi-ts.config.ts'
+      - 'tsconfig*.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'README.md'
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: 'Version increment'
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      # The tag and the GitHub release.
+      contents: write
+      # The OIDC token npm exchanges for publishing and signs the provenance with.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      # npm trusted publishing needs npm >= 11.5.1, which Node 22 does not ship. No registry-url:
+      # it writes an _authToken line npm would use instead of OIDC.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # After setup-node, and without its own Node: either order or a second Node breaks OIDC.
+      - uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
+        with:
+          install: false
+          node-version-file: false
+      - run: pnpm install --frozen-lockfile
+
+      - name: Choose the version
+        id: version
+        env:
+          INCREMENT: ${{ inputs.increment || 'auto' }}
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name package.json)
+          current=$(npm view "$name" version)
+          echo "npm holds $name@$current"
+
+          if [ "$INCREMENT" = auto ] && git rev-parse -q --verify "refs/tags/v$current" >/dev/null \
+              && git diff --quiet "v$current" HEAD -- src openapi.json openapi-ts.config.ts 'tsconfig*.json' package.json pnpm-lock.yaml README.md; then
+            echo "Nothing changed since v$current."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          increment=$INCREMENT
+          if [ "$increment" = auto ]; then
+            mkdir -p "$RUNNER_TEMP/prev"
+            (cd "$RUNNER_TEMP/prev" && npm pack "$name@$current" --silent >/dev/null && tar -xzf ./*.tgz)
+            prev="$RUNNER_TEMP/prev/package/openapi.json"
+            if [ ! -f "$prev" ]; then
+              increment=minor
+            elif cmp -s "$prev" openapi.json; then
+              increment=patch
+            elif docker run --rm -v "$RUNNER_TEMP/prev/package:/old" -v "$PWD:/new" tufin/oasdiff:v1.39.0 \
+                breaking /old/openapi.json /new/openapi.json --fail-on ERR; then
+              increment=minor
+            else
+              increment=major
+            fi
+          fi
+
+          next=$(npx -y semver@7.7.3 -i "$increment" "$current")
+          echo "$current -> $next ($increment)"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - if: steps.version.outputs.skip != 'true'
+        run: pnpm check && pnpm test
+
+      - name: Publish
+        if: steps.version.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.next }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npm version "$VERSION" --no-git-tag-version
+          npm publish --provenance --access public
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --generate-notes --verify-tag
