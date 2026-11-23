@@ -1,4 +1,4 @@
-# Publishes a prerelease under the npm tag `next` for each push to the branch staging.
+# Stages a prerelease under the npm tag `next` for each push to the branch staging.
 #
 # Nobody edits staging by hand: it is main plus one commit that replaces openapi.json with the
 # spec of the API's next release. So `next` holds the routes that are not in production yet.
@@ -43,6 +43,8 @@ jobs:
         with:
           install: false
           node-version-file: false
+      # `npm stage` needs npm >= 11.15.0.
+      - run: npm install -g npm@11.15.0
       - run: pnpm install --frozen-lockfile
 
       - name: Choose the version
@@ -51,9 +53,15 @@ jobs:
           set -euo pipefail
           name=$(jq -r .name package.json)
           stable=$(npm view "$name" version)
+          tagged=$(git tag -l 'v*' | sed 's/^v//' | grep -v -- '-' | sort -V | tail -1)
+          if [ -n "$tagged" ] && [ "$(printf '%s\n%s\n' "$stable" "$tagged" | sort -V | tail -1)" = "$tagged" ]; then stable=$tagged; fi
           git show origin/main:openapi.json > "$RUNNER_TEMP/main.json"
-          mkdir -p "$RUNNER_TEMP/stable"
-          (cd "$RUNNER_TEMP/stable" && npm pack "$name@$stable" --silent >/dev/null && tar -xzf ./*.tgz)
+          mkdir -p "$RUNNER_TEMP/stable/package"
+          if git rev-parse -q --verify "refs/tags/v$stable" >/dev/null; then
+            git show "v$stable:openapi.json" > "$RUNNER_TEMP/stable/package/openapi.json"
+          else
+            (cd "$RUNNER_TEMP/stable" && npm pack "$name@$stable" --silent >/dev/null && tar -xzf ./*.tgz)
+          fi
           # The stable version predates the committed spec: the next one is a major one anyway.
           if [ ! -f "$RUNNER_TEMP/stable/package/openapi.json" ]; then
             increment=major
@@ -66,7 +74,7 @@ jobs:
             increment=major
           fi
           base=$(npx -y semver@7.7.3 -i "$increment" "$stable")
-          n=$(npm view "$name" versions --json | jq --arg p "$base-next." '[.[] | select(startswith($p))] | length')
+          n=$(git tag -l "v$base-next.*" | wc -l)
           next="$base-next.$((n + 1))"
           echo "$stable -> $next ($increment against main)"
           echo "next=$next" >> "$GITHUB_OUTPUT"
@@ -79,6 +87,6 @@ jobs:
         run: |
           set -euo pipefail
           npm version "$VERSION" --no-git-tag-version
-          npm publish --provenance --access public --tag next
+          npm stage publish --provenance --access public --tag next
           git tag "v$VERSION"
           git push origin "v$VERSION"

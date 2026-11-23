@@ -1,4 +1,4 @@
-# Releases the package on every push to main that changes what it ships, then publishes it to npm
+# Releases the package on every push to main that changes what it ships, then stages it on npm
 # with provenance. The version is the one npm holds, increased:
 #   - major when oasdiff finds a breaking change between the spec of that version and this one,
 #   - minor when the spec changed otherwise,
@@ -65,6 +65,8 @@ jobs:
         with:
           install: false
           node-version-file: false
+      # `npm stage` needs npm >= 11.15.0.
+      - run: npm install -g npm@11.15.0
       - run: pnpm install --frozen-lockfile
 
       - name: Choose the version
@@ -74,8 +76,13 @@ jobs:
         run: |
           set -euo pipefail
           name=$(jq -r .name package.json)
+          # A staged version is not on npm until a maintainer approves it, but its tag exists: the
+          # last version is the highest of the two, so two releases waiting for approval never
+          # take the same number.
           current=$(npm view "$name" version)
-          echo "npm holds $name@$current"
+          tagged=$(git tag -l 'v*' | sed 's/^v//' | grep -v -- '-' | sort -V | tail -1)
+          if [ -n "$tagged" ] && [ "$(printf '%s\n%s\n' "$current" "$tagged" | sort -V | tail -1)" = "$tagged" ]; then current=$tagged; fi
+          echo "last version: $name@$current"
 
           if [ "$INCREMENT" = auto ] && git rev-parse -q --verify "refs/tags/v$current" >/dev/null \
               && git diff --quiet "v$current" HEAD -- src openapi.json openapi-ts.config.ts 'tsconfig*.json' package.json pnpm-lock.yaml README.md; then
@@ -86,8 +93,14 @@ jobs:
 
           increment=$INCREMENT
           if [ "$increment" = auto ]; then
-            mkdir -p "$RUNNER_TEMP/prev"
-            (cd "$RUNNER_TEMP/prev" && npm pack "$name@$current" --silent >/dev/null && tar -xzf ./*.tgz)
+            # The spec of the last version: from its tag, or from npm for one released before
+            # this repository.
+            mkdir -p "$RUNNER_TEMP/prev/package"
+            if git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+              git show "v$current:openapi.json" > "$RUNNER_TEMP/prev/package/openapi.json"
+            else
+              (cd "$RUNNER_TEMP/prev" && npm pack "$name@$current" --silent >/dev/null && tar -xzf ./*.tgz)
+            fi
             prev="$RUNNER_TEMP/prev/package/openapi.json"
             # A version published before the spec was committed: nothing to compare with, and
             # the SDK it holds is not this one.
@@ -118,7 +131,8 @@ jobs:
         run: |
           set -euo pipefail
           npm version "$VERSION" --no-git-tag-version
-          npm publish --provenance --access public
+          npm stage publish --provenance --access public
           git tag "v$VERSION"
           git push origin "v$VERSION"
           gh release create "v$VERSION" --generate-notes --verify-tag
+          echo "::notice::v$VERSION is staged on npm: a maintainer approves it (npmjs.com, or npm stage approve) before anyone can install it."

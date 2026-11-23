@@ -51,3 +51,6 @@ production yet, and can change before they are.
   breaking change of `src/client.ts`, run **Publish** by hand and choose
   `major`.
 - The version is not committed. npm and the tag `v<version>` hold it.
+- **Publish** stages the version on npm: it cannot be installed until a
+  maintainer approves it, on npmjs.com or with `npm stage approve <id>`
+  (`npm stage list` shows the waiting ones). The approval asks for 2FA.
