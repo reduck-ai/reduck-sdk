@@ -30,18 +30,6 @@ pnpm update-spec
 
 ## Releases
 
-Two branches, two npm tags:
-
-| Branch    | Spec of                 | npm tag  | Versions       |
-| --------- | ----------------------- | -------- | -------------- |
-| `main`    | reduck.ai (production)  | `latest` | `x.y.z`        |
-| `staging` | the next API release    | `next`   | `x.y.z-next.N` |
-
-`staging` is `main` plus the spec of the next API release, pushed when that
-release is ready for testing. Do not open a pull request against it: a change goes into `main`,
-and reaches `staging` with the next deploy. `next` holds routes that are not in
-production yet, and can change before they are.
-
 - When Reduck releases its API, the **Update spec** workflow opens a pull
   request with the new `openapi.json`. It also runs each day. Its description
   lists the breaking changes, if any.
