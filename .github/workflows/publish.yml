@@ -2,7 +2,8 @@
 # with provenance. The version is the one npm holds, increased:
 #   - major when oasdiff finds a breaking change between the spec of that version and this one,
 #   - minor when the spec changed otherwise,
-#   - patch for anything else.
+#   - patch for anything else,
+#   - major as well when the version npm holds has no openapi.json to compare with.
 # Run it by hand (Actions > Publish > Run workflow) to choose the increment, for example a major
 # version for a breaking change in src/client.ts.
 #
@@ -88,8 +89,10 @@ jobs:
             mkdir -p "$RUNNER_TEMP/prev"
             (cd "$RUNNER_TEMP/prev" && npm pack "$name@$current" --silent >/dev/null && tar -xzf ./*.tgz)
             prev="$RUNNER_TEMP/prev/package/openapi.json"
+            # A version published before the spec was committed: nothing to compare with, and
+            # the SDK it holds is not this one.
             if [ ! -f "$prev" ]; then
-              increment=minor
+              increment=major
             elif cmp -s "$prev" openapi.json; then
               increment=patch
             elif docker run --rm -v "$RUNNER_TEMP/prev/package:/old" -v "$PWD:/new" tufin/oasdiff:v1.39.0 \

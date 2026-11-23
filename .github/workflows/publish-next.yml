@@ -52,7 +52,12 @@ jobs:
           name=$(jq -r .name package.json)
           stable=$(npm view "$name" version)
           git show origin/main:openapi.json > "$RUNNER_TEMP/main.json"
-          if cmp -s "$RUNNER_TEMP/main.json" openapi.json; then
+          mkdir -p "$RUNNER_TEMP/stable"
+          (cd "$RUNNER_TEMP/stable" && npm pack "$name@$stable" --silent >/dev/null && tar -xzf ./*.tgz)
+          # The stable version predates the committed spec: the next one is a major one anyway.
+          if [ ! -f "$RUNNER_TEMP/stable/package/openapi.json" ]; then
+            increment=major
+          elif cmp -s "$RUNNER_TEMP/main.json" openapi.json; then
             increment=patch
           elif docker run --rm -v "$RUNNER_TEMP:/old" -v "$PWD:/new" tufin/oasdiff:v1.39.0 \
               breaking /old/main.json /new/openapi.json --fail-on ERR; then
