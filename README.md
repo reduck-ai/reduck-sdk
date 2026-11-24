@@ -8,8 +8,7 @@
 
 TypeScript SDK for [Reduck](https://reduck.ai). Use it to manage your browser
 scripts, devices and runs from your code. Each function and type is generated
-from the [OpenAPI specification](./openapi.json) that reduck.ai publishes at
-`https://reduck.ai/api/openapi.json`.
+from the [OpenAPI specification](https://reduck.ai/api/openapi.json) of reduck.ai.
 
 ## Installation
 
@@ -103,7 +102,7 @@ Pass the returned `client` to any function. List endpoints return
 
 `handle` is `@username` for a personal scope or a project slug. The table shows
 the frequent functions. Your editor shows all of them, or see
-[openapi.json](./openapi.json).
+[openapi.json](https://reduck.ai/api/openapi.json).
 
 ## Errors
 
@@ -136,10 +135,6 @@ if (error) {
 
 The package follows [semantic versioning](https://semver.org). A change to the
 API that can break your code gives a major version.
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
