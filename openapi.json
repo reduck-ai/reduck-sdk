@@ -738,7 +738,14 @@
         "additionalProperties": false,
         "properties": {
           "account": {
-            "description": "The identity a probe script or the SSO sign-in reported (usually an email). Null until one has; it is never set by hand.",
+            "description": "The account the last check that found the session signed in named (usually an email). Null until one has, or when that check named none; it is never set by hand.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checked_at": {
+            "description": "When the last check of its account that answered started. A check that failed or did not end leaves it. Null until one has answered. Cookies synced after it may be signed in to another account.",
             "type": [
               "string",
               "null"
@@ -748,48 +755,60 @@
             "type": "string"
           },
           "host": {
-            "description": "The website, bare: no scheme, no leading \"www.\", e.g. \"linkedin.com\". For an SSO connector this is the identity provider, e.g. \"accounts.google.com\".",
+            "description": "The website, bare: no scheme, no leading \"www.\", e.g. \"linkedin.com\".",
             "type": "string"
           },
           "id": {
             "type": "string"
           },
-          "is_sso": {
-            "description": "True when this is an identity-provider session usable for \"Continue with <provider>\".",
-            "type": "boolean"
-          },
-          "label": {
-            "description": "The name a person gave this connector, to tell it apart from the host's others.",
+          "logged_in": {
+            "description": "Whether that check found the session signed in. Null until one has answered.",
             "type": [
-              "string",
+              "boolean",
               "null"
             ]
           },
           "profile_id": {
-            "description": "The end-user this connector is kept for, as the developer named them. Empty for the account's own connectors.",
-            "type": "string"
-          },
-          "sso_account": {
-            "description": "For a connector created through an SSO connector: that SSO's account (email). The reference autoreconnect follows. Null otherwise.",
+            "description": "The profile it sits in; null for none.",
             "type": [
               "string",
               "null"
             ]
           },
+          "subdomains": {
+            "description": "The subdomains of its host that its cookies are set on, without Chrome's leading dot, in alphabetical order. Names only, never a value.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "synced_at": {
+            "description": "When its cookies were last saved: from a sign-in or a save through the API. A run writing back the cookies it refreshed does not move it.",
+            "type": "string"
+          },
           "updated_at": {
             "type": "string"
+          },
+          "used_at": {
+            "description": "When a run last used it. Null until one has.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "id",
-          "host",
-          "profile_id",
           "account",
-          "label",
-          "is_sso",
-          "sso_account",
+          "checked_at",
           "created_at",
-          "updated_at"
+          "host",
+          "id",
+          "logged_in",
+          "profile_id",
+          "subdomains",
+          "synced_at",
+          "updated_at",
+          "used_at"
         ],
         "type": "object"
       },
@@ -838,61 +857,168 @@
         ],
         "type": "object"
       },
-      "ConnectorLoginCredential": {
+      "ConnectorLink": {
         "additionalProperties": false,
         "properties": {
-          "password": {
+          "connector_id": {
+            "description": "The ID of the Auth session cookies the login saved, once the link is `done`. Absent before, and once those Auth session cookies are deleted.",
             "type": "string"
           },
-          "username": {
+          "created_at": {
             "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ConnectorLoginHost": {
-        "additionalProperties": false,
-        "properties": {
-          "cookies": {
-            "description": "Cookies stored for this site; 0 until the sign-in lands.",
-            "type": "number"
+          },
+          "error": {
+            "description": "Why the browser closed with nothing saved, when something went wrong.",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "While nobody has opened the link, when it stops opening. While its browser is open, when the browser closes, saving what it holds by then.",
+            "type": "string"
           },
           "host": {
+            "description": "The site whose cookies become the Auth session cookies, bare (e.g. \"linkedin.com\").",
             "type": "string"
           },
-          "stored": {
-            "type": "boolean"
+          "id": {
+            "type": "string"
+          },
+          "page_url": {
+            "description": "Where the open browser stands, so a person watching can tell whether the login has moved.",
+            "type": "string"
+          },
+          "profile_id": {
+            "description": "The profile the Auth session cookies are saved into; absent for none.",
+            "type": "string"
+          },
+          "return_url": {
+            "description": "Where the page sends the person once the login ends, or when its browser cannot open, with `link_id` and `status` added to its query. Absent: the page tells them they can close it.",
+            "type": "string"
+          },
+          "start_url": {
+            "description": "Where the browser opens.",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorLinkStatus",
+            "description": "`waiting`: the browser is not closed yet. `done`: the browser closed with the cookies saved. `failed`: it closed with nothing saved. `expired`: nobody opened the link in time."
           }
         },
         "required": [
+          "id",
+          "status",
           "host",
-          "cookies",
-          "stored"
+          "start_url",
+          "expires_at",
+          "created_at"
         ],
         "type": "object"
       },
-      "ConnectorLoginStatus": {
+      "ConnectorLinkStatus": {
         "enum": [
-          "waiting",
-          "stored",
           "done",
-          "failed"
+          "expired",
+          "failed",
+          "waiting"
         ],
         "type": "string"
       },
       "ConnectorProfile": {
         "additionalProperties": false,
         "properties": {
-          "connectors": {
-            "type": "number"
+          "created_at": {
+            "type": "string"
           },
-          "profile_id": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique among the user's profiles.",
+            "type": "string"
+          },
+          "updated_at": {
             "type": "string"
           }
         },
         "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ConnectorSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "description": "The account the last check that found the session signed in named (usually an email). Null until one has, or when that check named none; it is never set by hand.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checked_at": {
+            "description": "When the last check of its account that answered started. A check that failed or did not end leaves it. Null until one has answered. Cookies synced after it may be signed in to another account.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "host": {
+            "description": "The website, bare: no scheme, no leading \"www.\", e.g. \"linkedin.com\".",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "logged_in": {
+            "description": "Whether that check found the session signed in. Null until one has answered.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "profile_id": {
+            "description": "The profile it sits in; null for none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subdomain_count": {
+            "description": "How many subdomains of its host its cookies are set on.",
+            "type": "number"
+          },
+          "synced_at": {
+            "description": "When its cookies were last saved: from a sign-in or a save through the API. A run writing back the cookies it refreshed does not move it.",
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "used_at": {
+            "description": "When a run last used it. Null until one has.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "account",
+          "checked_at",
+          "created_at",
+          "host",
+          "id",
+          "logged_in",
           "profile_id",
-          "connectors"
+          "subdomain_count",
+          "synced_at",
+          "updated_at",
+          "used_at"
         ],
         "type": "object"
       },
@@ -900,7 +1026,14 @@
         "additionalProperties": false,
         "properties": {
           "account": {
-            "description": "The identity a probe script or the SSO sign-in reported (usually an email). Null until one has; it is never set by hand.",
+            "description": "The account the last check that found the session signed in named (usually an email). Null until one has, or when that check named none; it is never set by hand.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checked_at": {
+            "description": "When the last check of its account that answered started. A check that failed or did not end leaves it. Null until one has answered. Cookies synced after it may be signed in to another account.",
             "type": [
               "string",
               "null"
@@ -916,49 +1049,123 @@
             "type": "string"
           },
           "host": {
-            "description": "The website, bare: no scheme, no leading \"www.\", e.g. \"linkedin.com\". For an SSO connector this is the identity provider, e.g. \"accounts.google.com\".",
+            "description": "The website, bare: no scheme, no leading \"www.\", e.g. \"linkedin.com\".",
             "type": "string"
           },
           "id": {
             "type": "string"
           },
-          "is_sso": {
-            "description": "True when this is an identity-provider session usable for \"Continue with <provider>\".",
-            "type": "boolean"
-          },
-          "label": {
-            "description": "The name a person gave this connector, to tell it apart from the host's others.",
+          "logged_in": {
+            "description": "Whether that check found the session signed in. Null until one has answered.",
             "type": [
-              "string",
+              "boolean",
               "null"
             ]
           },
           "profile_id": {
-            "description": "The end-user this connector is kept for, as the developer named them. Empty for the account's own connectors.",
-            "type": "string"
-          },
-          "sso_account": {
-            "description": "For a connector created through an SSO connector: that SSO's account (email). The reference autoreconnect follows. Null otherwise.",
+            "description": "The profile it sits in; null for none.",
             "type": [
               "string",
               "null"
             ]
           },
+          "subdomains": {
+            "description": "The subdomains of its host that its cookies are set on, without Chrome's leading dot, in alphabetical order. Names only, never a value.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "synced_at": {
+            "description": "When its cookies were last saved: from a sign-in or a save through the API. A run writing back the cookies it refreshed does not move it.",
+            "type": "string"
+          },
           "updated_at": {
             "type": "string"
+          },
+          "used_at": {
+            "description": "When a run last used it. Null until one has.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "account",
+          "checked_at",
           "cookies",
           "created_at",
           "host",
           "id",
-          "is_sso",
-          "label",
+          "logged_in",
           "profile_id",
-          "sso_account",
-          "updated_at"
+          "subdomains",
+          "synced_at",
+          "updated_at",
+          "used_at"
+        ],
+        "type": "object"
+      },
+      "CreatedConnectorLink": {
+        "additionalProperties": false,
+        "description": "A link as its creation answers it, the one time its address is given.",
+        "properties": {
+          "connector_id": {
+            "description": "The ID of the Auth session cookies the login saved, once the link is `done`. Absent before, and once those Auth session cookies are deleted.",
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "error": {
+            "description": "Why the browser closed with nothing saved, when something went wrong.",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "While nobody has opened the link, when it stops opening. While its browser is open, when the browser closes, saving what it holds by then.",
+            "type": "string"
+          },
+          "host": {
+            "description": "The site whose cookies become the Auth session cookies, bare (e.g. \"linkedin.com\").",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page_url": {
+            "description": "Where the open browser stands, so a person watching can tell whether the login has moved.",
+            "type": "string"
+          },
+          "profile_id": {
+            "description": "The profile the Auth session cookies are saved into; absent for none.",
+            "type": "string"
+          },
+          "return_url": {
+            "description": "Where the page sends the person once the login ends, or when its browser cannot open, with `link_id` and `status` added to its query. Absent: the page tells them they can close it.",
+            "type": "string"
+          },
+          "start_url": {
+            "description": "Where the browser opens.",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorLinkStatus",
+            "description": "`waiting`: the browser is not closed yet. `done`: the browser closed with the cookies saved. `failed`: it closed with nothing saved. `expired`: nobody opened the link in time."
+          },
+          "url": {
+            "description": "The page to sign in on. Only the creation of the link gives it: keep it. Anyone who has it can use it, with or without a Reduck account, until the link is over: give it only to the person who must sign in.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "expires_at",
+          "host",
+          "id",
+          "start_url",
+          "status",
+          "url"
         ],
         "type": "object"
       },
@@ -1059,6 +1266,7 @@
               "method_not_allowed",
               "request_timeout",
               "conflict",
+              "gone",
               "content_too_large",
               "unsupported_media_type",
               "unprocessable_content",
@@ -1067,6 +1275,7 @@
               "internal_error",
               "upstream_failed",
               "unavailable",
+              "upstream_timeout",
               "device_not_found",
               "feature_locked",
               "name_taken",
@@ -1078,6 +1287,7 @@
               "stale_version",
               "draft_changed",
               "noncompliant",
+              "whoami_format",
               "eval_args_invalid",
               "evals_failing",
               "type_errors",
@@ -1085,14 +1295,12 @@
               "release_not_published",
               "no_release",
               "migration_missing",
-              "migration_edited",
-              "connector_ambiguous"
+              "migration_edited"
             ],
             "type": "string",
             "x-enum-descriptions": {
               "archived": "The resource is archived. Restore it first.",
               "conflict": "The request conflicts with the current state of the resource.",
-              "connector_ambiguous": "More than one connector matches. `connectors` lists them: name one.",
               "content_too_large": "The request body is larger than this endpoint accepts.",
               "dependency_failed": "A service that the request needs refused it. The message gives its answer.",
               "device_not_found": "The device does not exist, or it belongs to another account. A browser that holds this device must pair again.",
@@ -1102,6 +1310,7 @@
               "evals_failing": "An eval fails, or did not run, on this version. `evals` gives each eval.",
               "feature_locked": "The account does not have this feature. The message says where to ask for access.",
               "forbidden": "The credential does not give access to this action.",
+              "gone": "The resource is no longer available.",
               "internal_error": "An unexpected error occurred on the server.",
               "invalid_request": "The request is not valid. When the body failed validation, `variables` names the fields that are wrong.",
               "method_not_allowed": "This endpoint does not accept this method.",
@@ -1124,7 +1333,9 @@
               "unavailable": "The service is not available at this time. Send the request again later.",
               "unprocessable_content": "The request is valid, but its content cannot be accepted.",
               "unsupported_media_type": "The request body is not in a format that this endpoint accepts.",
-              "upstream_failed": "A service that the request needs did not answer correctly."
+              "upstream_failed": "A service that the request needs did not answer correctly.",
+              "upstream_timeout": "A service that the request needs did not answer in time.",
+              "whoami_format": "Whoami scripts (slug `whoami`) must follow the whoami format. The version must be loggedIn, and its output schema must declare `loggedIn` as a required boolean and give each other field of the format the correct type. `problems` gives each problem."
             }
           },
           "error": {
@@ -1252,6 +1463,15 @@
         ],
         "type": "object"
       },
+      "ManagedRegion": {
+        "enum": [
+          "eu-central-1",
+          "us-east-1",
+          "us-west-2",
+          "ap-southeast-1"
+        ],
+        "type": "string"
+      },
       "ManagedUsage": {
         "additionalProperties": false,
         "properties": {
@@ -1348,6 +1568,72 @@
           "data": {
             "items": {
               "$ref": "#/components/schemas/AppUpdate"
+            },
+            "type": "array"
+          },
+          "has_next_page": {
+            "type": "boolean"
+          },
+          "total_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "data",
+          "has_next_page"
+        ],
+        "type": "object"
+      },
+      "PaginatedResponseConnectorLink": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorLink"
+            },
+            "type": "array"
+          },
+          "has_next_page": {
+            "type": "boolean"
+          },
+          "total_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "data",
+          "has_next_page"
+        ],
+        "type": "object"
+      },
+      "PaginatedResponseConnectorProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorProfile"
+            },
+            "type": "array"
+          },
+          "has_next_page": {
+            "type": "boolean"
+          },
+          "total_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "data",
+          "has_next_page"
+        ],
+        "type": "object"
+      },
+      "PaginatedResponseConnectorSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorSummary"
             },
             "type": "array"
           },
@@ -1475,6 +1761,20 @@
               "null"
             ]
           },
+          "batch_index": {
+            "description": "The run's place in its batch, from 1, in the order the scripts were given. Null for a run of one script.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "batch_total": {
+            "description": "How many scripts its batch was given. Null for a run of one script.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "browser": {
             "$ref": "#/components/schemas/RunDevice"
           },
@@ -1589,6 +1889,8 @@
           "error_type",
           "external_message",
           "batch_id",
+          "batch_index",
+          "batch_total",
           "script"
         ],
         "type": "object"
@@ -1776,7 +2078,16 @@
             ]
           },
           "region": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManagedRegion"
+              },
+              {
+                "const": "",
+                "type": "string"
+              }
+            ],
+            "description": "The datacenter of a managed browser; \"\" for the default one."
           },
           "validation_code": {
             "type": [
@@ -1955,9 +2266,6 @@
           "host": {
             "type": "string"
           },
-          "human_required": {
-            "type": "boolean"
-          },
           "id": {
             "type": "string"
           },
@@ -2003,7 +2311,6 @@
           "description",
           "execution_count",
           "host",
-          "human_required",
           "id",
           "last_run_at",
           "name",
@@ -2290,9 +2597,6 @@
           "host": {
             "type": "string"
           },
-          "human_required": {
-            "type": "boolean"
-          },
           "id": {
             "type": "string"
           },
@@ -2338,7 +2642,6 @@
           "description",
           "execution_count",
           "host",
-          "human_required",
           "id",
           "last_run_at",
           "name",
@@ -3644,6 +3947,12 @@
                     },
                     {
                       "properties": {
+                        "code": {
+                          "enum": [
+                            "forbidden",
+                            "feature_locked"
+                          ]
+                        },
                         "status": {
                           "enum": [
                             403
@@ -4195,6 +4504,12 @@
                     },
                     {
                       "properties": {
+                        "code": {
+                          "enum": [
+                            "forbidden",
+                            "feature_locked"
+                          ]
+                        },
                         "status": {
                           "enum": [
                             403
@@ -6213,17 +6528,101 @@
     },
     "/api/connectors": {
       "get": {
-        "description": "List your connectors for one profile (your own account when `profile` is omitted), by website. Summaries only: cookies are never part of a listing.",
+        "description": "List your Auth session cookies, one entry for each website, without the cookies.",
         "operationId": "listConnectors",
         "parameters": [
           {
             "in": "query",
-            "name": "profile",
+            "name": "page",
             "required": false,
             "schema": {
-              "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9_.@:-]*$",
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "host",
+            "required": false,
+            "schema": {
+              "description": "Only the Auth session cookies of the site this host belongs to: mail.google.com names google.com.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "const": "all",
+                  "type": "string"
+                }
+              ],
+              "description": "The profile whose Auth session cookies to list, by ID, or \"all\" for every profile. Left out, the Auth session cookies in no profile."
+            }
+          },
+          {
+            "in": "query",
+            "name": "account",
+            "required": false,
+            "schema": {
+              "description": "Only the Auth session cookies signed in to this account on the site.",
+              "maxLength": 320,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Only the Auth session cookies whose host or one of whose subdomains contains this text.",
+              "maxLength": 253,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "description": "The field to sort by: \"host\" (the default), \"account\" or \"used_at\".",
+              "enum": [
+                "host",
+                "account",
+                "used_at"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "description": "\"asc\" (the default) or \"desc\".",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "type": "string"
             }
           }
@@ -6233,14 +6632,156 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Connector"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/PaginatedResponseConnectorSummary"
                 }
               }
             },
             "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such profile."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "List connectors"
+      }
+    },
+    "/api/connectors/delete": {
+      "post": {
+        "description": "Delete several entries of Auth session cookies and the cookies they hold.",
+        "operationId": "batchDeleteConnectors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "ids": {
+                    "description": "The IDs of the Auth session cookies to delete. An ID that is not yours is skipped.",
+                    "items": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "ids"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Invalid request"
           },
           "401": {
             "content": {
@@ -6294,6 +6835,128 @@
         "security": [
           {
             "bearerAuth": [
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Batch delete connectors"
+      }
+    },
+    "/api/connectors/hosts/{host}": {
+      "get": {
+        "description": "Get the Auth session cookies of the website a host belongs to, with the cookies.",
+        "operationId": "resolveConnector",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "profile_id",
+            "required": false,
+            "schema": {
+              "description": "The profile to work in, by ID. Left out, the Auth session cookies that are in no profile. A profile holds one set of Auth session cookies per site.",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "host",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorWithCookies"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such profile, or the host's website has no Auth session cookies in it."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
               "connector:read"
             ]
           },
@@ -6301,11 +6964,22 @@
             "apiKey": []
           }
         ],
-        "summary": "List connectors"
+        "summary": "Resolve connector"
       },
-      "post": {
-        "description": "Store a new connector for a website, beside any the site already holds for that profile. Every cookie has to belong to that host. A connector gets its account only from a probe script, so a second connector for the same site and profile needs a label to tell it apart.",
-        "operationId": "createConnector",
+      "put": {
+        "description": "Save a website's cookies as its Auth session cookies: they replace the cookies saved for the website, or create the entry. The account recorded for them does not change.",
+        "operationId": "saveConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host",
+            "required": true,
+            "schema": {
+              "description": "A host of the site, which names its Auth session cookies: cookies saved for mail.google.com are stored on google.com.",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6313,6 +6987,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "cookies": {
+                    "description": "Every cookie belongs to the site of `host`: its domain or one of the domain's subdomains.",
                     "items": {
                       "additionalProperties": {},
                       "properties": {
@@ -6362,24 +7037,14 @@
                     "minItems": 1,
                     "type": "array"
                   },
-                  "host": {
-                    "type": "string"
-                  },
-                  "label": {
-                    "description": "A name for the connector, to tell it apart from the site's other connectors.",
-                    "maxLength": 200,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "profile": {
-                    "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9_.@:-]*$",
+                  "profile_id": {
+                    "description": "The profile to work in, by ID. Left out, the Auth session cookies that are in no profile. A profile holds one set of Auth session cookies per site.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   }
                 },
                 "required": [
-                  "host",
                   "cookies"
                 ],
                 "type": "object"
@@ -6389,6 +7054,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            },
+            "description": "OK"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -6469,39 +7144,9 @@
                 }
               }
             },
-            "description": "An end-user's connector is created with an API key or an OAuth token, not from a browser session."
+            "description": "Forbidden"
           },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "conflict",
-                            "name_taken"
-                          ]
-                        },
-                        "status": {
-                          "enum": [
-                            409
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "The site already has a connector with that label, or one with neither an account nor a label, for this profile."
-          },
-          "503": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6513,7 +7158,7 @@
                       "properties": {
                         "status": {
                           "enum": [
-                            503
+                            404
                           ]
                         }
                       },
@@ -6523,7 +7168,7 @@
                 }
               }
             },
-            "description": "This environment stores no connectors."
+            "description": "No such profile."
           }
         },
         "security": [
@@ -6536,17 +7181,624 @@
             "apiKey": []
           }
         ],
-        "summary": "Create connector"
+        "summary": "Save connector"
       }
     },
-    "/api/connectors/by-id/{id}": {
-      "delete": {
-        "description": "Delete one connector, by id, and the cookies it holds.",
-        "operationId": "deleteConnectorById",
+    "/api/connectors/hosts/{host}/whoami": {
+      "post": {
+        "description": "Check who the Auth session cookies of a website are signed in as: run a whoami script with these cookies on a cloud browser, and record what it finds with them. This is a run on a cloud browser, billed as one, and the call waits up to 60 seconds for it to end. When the session is signed out, the account recorded for them does not change.",
+        "operationId": "identifyConnectorAccount",
         "parameters": [
           {
             "in": "path",
-            "name": "id",
+            "name": "host",
+            "required": true,
+            "schema": {
+              "description": "A host of the site whose Auth session cookies to check: mail.google.com checks the Auth session cookies of google.com.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "profile_id": {
+                    "description": "The profile to work in, by ID. Left out, the Auth session cookies that are in no profile. A profile holds one set of Auth session cookies per site.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "script": {
+                    "additionalProperties": false,
+                    "description": "The whoami script to run, on a host of the same site and marked `logged_in`. It returns an object with `loggedIn` (a boolean) and, when signed in, `account`, `email` or `username`: the first one set is the account. It can also return `name`, `userId` and `workspace` ({ id, name }). When the session is signed out, it returns `loggedIn: false` or throws a `SignedOutError`. Left out, the official whoami script for the site.",
+                    "properties": {
+                      "handle": {
+                        "description": "The owner a resource is addressed under: \"@username\" for a personal scope, or a bare slug for a project.",
+                        "type": "string"
+                      },
+                      "host": {
+                        "description": "The site the script automates, as a hostname.",
+                        "maxLength": 253,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "slug": {
+                        "description": "The script's unique identifier within its host, unique per owner.",
+                        "maxLength": 64,
+                        "pattern": "^[a-z0-9_-]+$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "host",
+                      "slug"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "account": {
+                      "description": "The account the script found: `account`, else `email`, else `username`. When the session is signed in, the Auth session cookies record it. Null when the script names none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "checked_at": {
+                      "description": "When the check started, as recorded with the Auth session cookies. Cookies synced after it may be signed in to another account.",
+                      "type": "string"
+                    },
+                    "email": {
+                      "description": "The email address the site shows for the person.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "logged_in": {
+                      "description": "Whether the session is signed in.",
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "description": "The name the site shows for the person.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "run_id": {
+                      "description": "The run of the whoami script, to read its trace.",
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "description": "The site's own id for the person.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "username": {
+                      "description": "The handle or the login name on the site.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The organization, team or store the session acts in, on a site where one account holds several."
+                    }
+                  },
+                  "required": [
+                    "logged_in",
+                    "account",
+                    "email",
+                    "username",
+                    "name",
+                    "user_id",
+                    "workspace",
+                    "checked_at",
+                    "run_id"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is malformed, the script is on another website, or the script is not marked `logged_in`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "This account is out of runs or of cloud browser time for this period."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such profile, the website has no Auth session cookies in it, no such script or it has no current version, or there is no official whoami script for the website."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            429
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Too many requests. Wait for the time `Retry-After` gives, then try again."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The run did not start, Reduck could not confirm that it started, the whoami script failed, or its answer does not have the shape `script` describes. The message gives the run id when there is one."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            504
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The whoami script did not end in time. The run goes on and is billed, but what it finds is not recorded. The message gives the run id."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:write",
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Identify connector account"
+      }
+    },
+    "/api/connectors/links": {
+      "get": {
+        "description": "List your login links, newest first, each as last recorded. Read one link to see where its browser stands.",
+        "operationId": "listConnectorLinks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponseConnectorLink"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "List connector links"
+      },
+      "post": {
+        "description": "Create a link to a Reduck page where a person signs in to a website in a cloud browser. Give the link to the person who has the account on the website: they do not need a Reduck account. When they sign in, Reduck saves the cookies of the website as your Auth session cookies. Anyone who has the link can use it. The link stops opening 7 days after its creation if nobody opens it. It is over when its browser closes, about 10 minutes after it opens. The browser spends your cloud browser time.",
+        "operationId": "createConnectorLink",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "host": {
+                    "description": "The site whose cookies become the Auth session cookies. The start URL's own site when omitted. The Auth session cookies of a site also serve its subdomains.",
+                    "type": "string"
+                  },
+                  "profile_id": {
+                    "description": "The profile to work in, by ID. Left out, the Auth session cookies that are in no profile. A profile holds one set of Auth session cookies per site.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "return_url": {
+                    "description": "The page of your product where the person goes when the login ends: an https URL, or an http URL on localhost. Reduck adds `link_id` and `status` to its query: `done`, `failed` or `expired`, or `waiting` when the person goes back before the login ends (the cloud browser could not open). Do not trust `status`: anyone can open this URL. Read the link to know its outcome.",
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "start_url": {
+                    "description": "The site's login page, where the browser opens.",
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start_url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedConnectorLink"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is malformed, or the start URL's host is not a site that Auth session cookies can be stored under: name it with `host`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "This account is out of cloud browser time for this period."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such profile."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Create connector link"
+      }
+    },
+    "/api/connectors/links/{link_id}": {
+      "delete": {
+        "description": "Delete a login link, so it no longer opens. A browser it already opened is closed, and nothing it holds is saved.",
+        "operationId": "deleteConnectorLink",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
             "required": true,
             "schema": {
               "format": "uuid",
@@ -6653,7 +7905,7 @@
                 }
               }
             },
-            "description": "Not found"
+            "description": "No such link."
           }
         },
         "security": [
@@ -6666,15 +7918,15 @@
             "apiKey": []
           }
         ],
-        "summary": "Delete connector by id"
+        "summary": "Delete connector link"
       },
-      "patch": {
-        "description": "Rename a connector, or remove its label.",
-        "operationId": "patchConnector",
+      "get": {
+        "description": "How a login link is going: whether someone opened it and signed in, and whether the cookies were saved.",
+        "operationId": "getConnectorLink",
         "parameters": [
           {
             "in": "path",
-            "name": "id",
+            "name": "link_id",
             "required": true,
             "schema": {
               "format": "uuid",
@@ -6683,73 +7935,16 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "account": {
-                    "description": "The account a probe reported. Only Reduck's own run service sets it.",
-                    "maxLength": 320,
-                    "type": "string"
-                  },
-                  "label": {
-                    "anyOf": [
-                      {
-                        "description": "A name for the connector, to tell it apart from the site's other connectors.",
-                        "maxLength": 200,
-                        "minLength": 1,
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "description": "The new label, or null to remove it."
-                  }
-                },
-                "required": [],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Connector"
+                  "$ref": "#/components/schemas/ConnectorLink"
                 }
               }
             },
             "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "The request is malformed, or it sets an account: only a probe script records one."
           },
           "401": {
             "content": {
@@ -6821,512 +8016,7 @@
                 }
               }
             },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "conflict",
-                            "name_taken"
-                          ]
-                        },
-                        "status": {
-                          "enum": [
-                            409
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Another connector on the site already has that label for this profile."
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "connector:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Patch connector"
-      },
-      "put": {
-        "description": "Replace one connector's cookies, by id. This is how a run writes the cookies it refreshed back to the connector it used.",
-        "operationId": "putConnectorById",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "cookies": {
-                    "items": {
-                      "additionalProperties": {},
-                      "properties": {
-                        "domain": {
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        "expires": {
-                          "type": "number"
-                        },
-                        "httpOnly": {
-                          "type": "boolean"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "path": {
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        "sameSite": {
-                          "enum": [
-                            "Strict",
-                            "Lax",
-                            "None"
-                          ],
-                          "type": "string"
-                        },
-                        "secure": {
-                          "type": "boolean"
-                        },
-                        "value": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "value",
-                        "domain",
-                        "path",
-                        "expires",
-                        "httpOnly",
-                        "secure"
-                      ],
-                      "type": "object"
-                    },
-                    "minItems": 1,
-                    "type": "array"
-                  },
-                  "sso_account": {
-                    "maxLength": 320,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "cookies"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connector"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "An end-user's connector is written with an API key or an OAuth token, not from a browser session."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            503
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "This environment stores no connectors."
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "connector:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Put connector by id"
-      }
-    },
-    "/api/connectors/login": {
-      "post": {
-        "description": "Open a Reduck cloud browser at a site's sign-in page for a PERSON to sign into. Returns `signInUrl`, a Reduck page that shows the live browser — hand it to whoever holds the account on that site. When they sign in, the connector for each host is stored on its own; poll `getConnectorLogin` to see it land. Use this when there is no Reduck extension to upload cookies from. `hosts` defaults to the login URL's own site. The browser is created when the page is opened and lives ~10 minutes from then. With `profile`, the connectors are stored for that end-user; `endUserLink` then also answers `endUserUrl`, a page the end-user signs in on without a Reduck account. An end-user's sign-in never answers what they typed.",
-        "operationId": "startConnectorLogin",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "endUserLink": {
-                    "description": "Also answer `endUserUrl`: a link for the end-user of `profile` to sign in on, with no Reduck account. Anyone holding it drives this one sign-in browser until it ends.",
-                    "type": "boolean"
-                  },
-                  "hosts": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "maxItems": 10,
-                    "minItems": 1,
-                    "type": "array"
-                  },
-                  "label": {
-                    "description": "The label of the connector the sign-in stores into. Needed when the site already holds several connectors for the profile; without it the site's only one is refreshed.",
-                    "maxLength": 200,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "loginUrl": {
-                    "format": "uri",
-                    "type": "string"
-                  },
-                  "profile": {
-                    "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9_.@:-]*$",
-                    "type": "string"
-                  },
-                  "sso": {
-                    "type": "boolean"
-                  },
-                  "ssoAccount": {
-                    "maxLength": 320,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "loginUrl"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "endUserUrl": {
-                      "description": "With `endUserLink`: the page the end-user signs in on, no Reduck account needed. It opens this one sign-in only, and stops working when the sign-in ends.",
-                      "type": "string"
-                    },
-                    "expiresAt": {
-                      "description": "When the browser closes on its own, storing whatever the jar holds by then.",
-                      "type": "string"
-                    },
-                    "hosts": {
-                      "description": "The sites that become connectors, canonical — the login URL's own when none were named.",
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "loginId": {
-                      "description": "The sign-in's id. Nothing has to be called with it: it identifies this one in a log.",
-                      "type": "string"
-                    },
-                    "loginUrl": {
-                      "description": "Where the browser was sent, echoed back.",
-                      "type": "string"
-                    },
-                    "profile": {
-                      "description": "The end-user profile the connectors are stored into; absent for your own account.",
-                      "type": "string"
-                    },
-                    "signInUrl": {
-                      "description": "Where the person signs in: a Reduck page showing the live browser. Give it to the account's owner — the page opens for them and for nobody else, so a link that leaks is a dead end rather than somebody else's browser.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "loginId",
-                    "signInUrl",
-                    "loginUrl",
-                    "hosts",
-                    "expiresAt"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Out of cloud browser time for this period, or an end-user's sign-in was started from a browser session instead of with an API key or an OAuth token."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "conflict"
-                          ]
-                        },
-                        "status": {
-                          "enum": [
-                            409
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "A site already holds several connectors for the profile and the sign-in names none: give it a `label`."
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            429
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Too many sign-ins already open on this account."
+            "description": "No such link."
           },
           "502": {
             "content": {
@@ -7350,191 +8040,7 @@
                 }
               }
             },
-            "description": "The browser could not be opened."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            503
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "This environment stores no connectors, or provisions no browsers."
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "connector:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Start connector login"
-      }
-    },
-    "/api/connectors/login/{login_id}": {
-      "get": {
-        "description": "How a sign-in started by `startConnectorLogin` is going: `waiting` (browser open, not signed in yet), `stored` (cookies saved, may still be refreshing), `done` (finished), `failed` (ended with nothing saved). `hosts` says how many cookies each site has so far.",
-        "operationId": "getConnectorLogin",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "login_id",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "credential": {
-                      "$ref": "#/components/schemas/ConnectorLoginCredential",
-                      "description": "The username and password to offer to save, when the detector recognised them. Never answered for an end-user's sign-in: their password is not yours to keep."
-                    },
-                    "error": {
-                      "description": "Why nothing more will happen, when something went wrong.",
-                      "type": "string"
-                    },
-                    "expiresAt": {
-                      "type": "string"
-                    },
-                    "hosts": {
-                      "items": {
-                        "$ref": "#/components/schemas/ConnectorLoginHost"
-                      },
-                      "type": "array"
-                    },
-                    "label": {
-                      "description": "The label of the connector the sign-in stores into, when it was given one.",
-                      "type": "string"
-                    },
-                    "loginId": {
-                      "type": "string"
-                    },
-                    "loginUrl": {
-                      "type": "string"
-                    },
-                    "pageUrl": {
-                      "description": "Where the browser stands, so the page can say whether the sign-in has moved.",
-                      "type": "string"
-                    },
-                    "profile": {
-                      "description": "The end-user profile the connectors are stored into; absent for your own account.",
-                      "type": "string"
-                    },
-                    "status": {
-                      "$ref": "#/components/schemas/ConnectorLoginStatus"
-                    }
-                  },
-                  "required": [
-                    "loginId",
-                    "status",
-                    "loginUrl",
-                    "hosts",
-                    "expiresAt"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "No such sign-in on this account."
+            "description": "Where its browser stands could not be read."
           }
         },
         "security": [
@@ -7547,19 +8053,41 @@
             "apiKey": []
           }
         ],
-        "summary": "Get connector login"
+        "summary": "Get connector link"
       }
     },
-    "/api/connectors/login/{login_id}/finish": {
-      "post": {
-        "description": "End a sign-in now instead of waiting out its window: harvest whatever cookies are there, store them, release the browser. Returns the final state. A sign-in also ends on its own when the person is done or the window closes, so this is only a shortcut.",
-        "operationId": "finishConnectorLogin",
+    "/api/connectors/profiles": {
+      "get": {
+        "description": "List your profiles, by name. A profile holds one entry of Auth session cookies per website, so a second account on a site goes into a second profile.",
+        "operationId": "listConnectorProfiles",
         "parameters": [
           {
-            "in": "path",
-            "name": "login_id",
-            "required": true,
+            "in": "query",
+            "name": "page",
+            "required": false,
             "schema": {
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "description": "Only the profile with this name. A name is unique among your profiles.",
+              "maxLength": 200,
               "minLength": 1,
               "type": "string"
             }
@@ -7570,183 +8098,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "credential": {
-                      "$ref": "#/components/schemas/ConnectorLoginCredential",
-                      "description": "The username and password to offer to save, when the detector recognised them. Never answered for an end-user's sign-in: their password is not yours to keep."
-                    },
-                    "error": {
-                      "description": "Why nothing more will happen, when something went wrong.",
-                      "type": "string"
-                    },
-                    "expiresAt": {
-                      "type": "string"
-                    },
-                    "hosts": {
-                      "items": {
-                        "$ref": "#/components/schemas/ConnectorLoginHost"
-                      },
-                      "type": "array"
-                    },
-                    "label": {
-                      "description": "The label of the connector the sign-in stores into, when it was given one.",
-                      "type": "string"
-                    },
-                    "loginId": {
-                      "type": "string"
-                    },
-                    "loginUrl": {
-                      "type": "string"
-                    },
-                    "pageUrl": {
-                      "description": "Where the browser stands, so the page can say whether the sign-in has moved.",
-                      "type": "string"
-                    },
-                    "profile": {
-                      "description": "The end-user profile the connectors are stored into; absent for your own account.",
-                      "type": "string"
-                    },
-                    "status": {
-                      "$ref": "#/components/schemas/ConnectorLoginStatus"
-                    }
-                  },
-                  "required": [
-                    "loginId",
-                    "status",
-                    "loginUrl",
-                    "hosts",
-                    "expiresAt"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "No such sign-in on this account."
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "connector:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Finish connector login"
-      }
-    },
-    "/api/connectors/profiles": {
-      "get": {
-        "description": "List the end-user profiles you hold connectors for, with how many each has. Your own account's connectors are not a profile and are not listed.",
-        "operationId": "listConnectorProfiles",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ConnectorProfile"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/PaginatedResponseConnectorProfile"
                 }
               }
             },
@@ -7812,49 +8164,171 @@
           }
         ],
         "summary": "List connector profiles"
+      },
+      "post": {
+        "description": "Create an empty profile.",
+        "operationId": "createConnectorProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The profile's name, unique among your profiles.",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorProfile"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "conflict",
+                            "name_taken"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            409
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "You already have a profile with that name."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Create connector profile"
       }
     },
-    "/api/connectors/{host}": {
+    "/api/connectors/profiles/{profile_id}": {
       "delete": {
-        "description": "Delete the connector you name on a host, and the cookies it holds. With no name, the site's only connector for the profile.",
-        "operationId": "deleteConnector",
+        "description": "Delete a profile, with all the Auth session cookies in it.",
+        "operationId": "deleteConnectorProfile",
         "parameters": [
           {
-            "in": "query",
-            "name": "profile",
-            "required": false,
-            "schema": {
-              "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9_.@:-]*$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "account",
-            "required": false,
-            "schema": {
-              "description": "The connector whose account (as its probe or SSO sign-in reported it) is this one.",
-              "maxLength": 320,
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "label",
-            "required": false,
-            "schema": {
-              "description": "The connector with this label, or \"\" for the one without a label.",
-              "maxLength": 200,
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
-            "name": "host",
+            "name": "profile_id",
             "required": true,
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -7957,37 +8431,7 @@
                 }
               }
             },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "conflict",
-                            "connector_ambiguous"
-                          ]
-                        },
-                        "status": {
-                          "enum": [
-                            409
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Several connectors match; the body's `connectors` lists them. Name one with `account` or `label`."
+            "description": "No such profile."
           }
         },
         "security": [
@@ -8000,48 +8444,19 @@
             "apiKey": []
           }
         ],
-        "summary": "Delete connector"
+        "summary": "Delete connector profile"
       },
       "get": {
-        "description": "Fetch the connector for a host, cookies included, ready for a run to inject. A host with no connector of its own is served by its nearest parent's, and a host with neither is a 404. When the site holds several connectors for the profile, name one with `account` or `label` (an empty `label` for the one without a label).",
-        "operationId": "getConnector",
+        "description": "Fetch one profile.",
+        "operationId": "getConnectorProfile",
         "parameters": [
           {
-            "in": "query",
-            "name": "profile",
-            "required": false,
-            "schema": {
-              "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9_.@:-]*$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "account",
-            "required": false,
-            "schema": {
-              "description": "The connector whose account (as its probe or SSO sign-in reported it) is this one.",
-              "maxLength": 320,
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "label",
-            "required": false,
-            "schema": {
-              "description": "The connector with this label, or \"\" for the one without a label.",
-              "maxLength": 200,
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
-            "name": "host",
+            "name": "profile_id",
             "required": true,
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -8051,7 +8466,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConnectorWithCookies"
+                  "$ref": "#/components/schemas/ConnectorProfile"
                 }
               }
             },
@@ -8103,7 +8518,7 @@
                 }
               }
             },
-            "description": "An end-user's connector is read with an API key or an OAuth token, not from a browser session."
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -8127,7 +8542,164 @@
                 }
               }
             },
-            "description": "Not found"
+            "description": "No such profile."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Get connector profile"
+      },
+      "patch": {
+        "description": "Rename a profile.",
+        "operationId": "patchConnectorProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The profile's name, unique among your profiles.",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorProfile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such profile."
           },
           "409": {
             "content": {
@@ -8142,7 +8714,7 @@
                         "code": {
                           "enum": [
                             "conflict",
-                            "connector_ambiguous"
+                            "name_taken"
                           ]
                         },
                         "status": {
@@ -8157,7 +8729,248 @@
                 }
               }
             },
-            "description": "Several connectors match; the body's `connectors` lists them. Name one with `account` or `label`."
+            "description": "You already have a profile with that name."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Patch connector profile"
+      }
+    },
+    "/api/connectors/{connector_id}": {
+      "delete": {
+        "description": "Delete one entry of Auth session cookies and the cookies it holds.",
+        "operationId": "deleteConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such Auth session cookies."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "connector:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Delete connector"
+      },
+      "get": {
+        "description": "Get one entry of Auth session cookies, without the cookies.",
+        "operationId": "getConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such Auth session cookies."
           }
         },
         "security": [
@@ -8173,14 +8986,16 @@
         "summary": "Get connector"
       },
       "put": {
-        "description": "Replace the cookies of the connector you name on a host, creating it when none matches. With no name, the site's only connector for the profile is replaced, or created when there is none. Every cookie has to belong to that host. This is how the extension uploads a site's cookies.",
-        "operationId": "putConnector",
+        "description": "Replace the cookies of one entry of Auth session cookies.",
+        "operationId": "replaceConnectorCookies",
         "parameters": [
           {
             "in": "path",
-            "name": "host",
+            "name": "connector_id",
             "required": true,
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -8191,12 +9006,8 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
-                  "account": {
-                    "description": "The connector whose account (as its probe or SSO sign-in reported it) is this one.",
-                    "maxLength": 320,
-                    "type": "string"
-                  },
                   "cookies": {
+                    "description": "Every cookie belongs to the site of these Auth session cookies: its domain or one of the domain's subdomains.",
                     "items": {
                       "additionalProperties": {},
                       "properties": {
@@ -8245,24 +9056,6 @@
                     },
                     "minItems": 1,
                     "type": "array"
-                  },
-                  "is_sso": {
-                    "type": "boolean"
-                  },
-                  "label": {
-                    "description": "The connector with this label, or \"\" for the one without a label.",
-                    "maxLength": 200,
-                    "type": "string"
-                  },
-                  "profile": {
-                    "description": "The end-user this connector is kept for, in your own naming (for example your user id). Omit, or leave empty, for your own account's connectors. Only an API key or an OAuth token can read or create an end-user's connector.",
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9_.@:-]*$",
-                    "type": "string"
-                  },
-                  "sso_account": {
-                    "maxLength": 320,
-                    "type": "string"
                   }
                 },
                 "required": [
@@ -8307,7 +9100,7 @@
                 }
               }
             },
-            "description": "The request is malformed, or it names an account no connector holds: an account is only ever recorded by a probe script."
+            "description": "The request is malformed, or a cookie belongs to another site than the Auth session cookies."
           },
           "401": {
             "content": {
@@ -8355,7 +9148,7 @@
                 }
               }
             },
-            "description": "An end-user's connector is written with an API key or an OAuth token, not from a browser session."
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -8379,38 +9172,7 @@
                 }
               }
             },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "conflict",
-                            "connector_ambiguous",
-                            "name_taken"
-                          ]
-                        },
-                        "status": {
-                          "enum": [
-                            409
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Several connectors match; the body's `connectors` lists them. Or the label is already taken."
+            "description": "No such Auth session cookies."
           }
         },
         "security": [
@@ -8423,7 +9185,7 @@
             "apiKey": []
           }
         ],
-        "summary": "Put connector"
+        "summary": "Replace connector cookies"
       }
     },
     "/api/devices": {
@@ -8708,13 +9470,20 @@
                       ],
                       "type": "object"
                     },
+                    "developer_mode": {
+                      "description": "Whether this account builds a product on Reduck for its own users, which publishes to it the MCP tools for Auth session cookies. False until the account says so.",
+                      "type": "boolean"
+                    },
                     "email": {
                       "type": "string"
                     },
                     "experimental_features": {
                       "description": "Experimental features this account has been let into, whether granted to it directly or to one of its projects.",
                       "items": {
-                        "const": "flock_apps",
+                        "enum": [
+                          "flock_apps",
+                          "reduck_backend"
+                        ],
                         "type": "string"
                       },
                       "type": "array"
@@ -8783,6 +9552,7 @@
                     "role",
                     "projects",
                     "experimental_features",
+                    "developer_mode",
                     "usage",
                     "credential"
                   ],
@@ -9054,8 +9824,20 @@
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   },
+                  "profile_id": {
+                    "description": "The profile to use for a `loggedIn` script on a cloud browser. When you do not give it, the script uses your Auth session cookies that are in no profile.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
                   "region": {
                     "description": "The datacenter region of the managed browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
+                    "enum": [
+                      "eu-central-1",
+                      "us-east-1",
+                      "us-west-2",
+                      "ap-southeast-1"
+                    ],
                     "type": "string"
                   },
                   "scripts": {
@@ -10385,6 +11167,7 @@
                   },
                   "content": {
                     "description": "The code of the version: a module with a default export, `export default async ({ builtins, page, args, files, ai }) => { ... }`. The default export gets the scope, and the value that it returns is the result. Code without a default export cannot run.",
+                    "maxLength": 200000,
                     "minLength": 1,
                     "type": "string"
                   },
@@ -10402,9 +11185,6 @@
                     "maxLength": 253,
                     "minLength": 1,
                     "type": "string"
-                  },
-                  "human_required": {
-                    "type": "boolean"
                   },
                   "input_schema": {
                     "additionalProperties": true,
@@ -10656,6 +11436,7 @@
                         "code": {
                           "enum": [
                             "unprocessable_content",
+                            "whoami_format",
                             "noncompliant",
                             "type_errors"
                           ]
@@ -11015,7 +11796,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "content": {
-                    "maxLength": 100000,
+                    "maxLength": 200000,
                     "minLength": 1,
                     "type": "string"
                   },
@@ -12322,9 +13103,6 @@
                     "minLength": 1,
                     "type": "string"
                   },
-                  "human_required": {
-                    "type": "boolean"
-                  },
                   "name": {
                     "maxLength": 75,
                     "minLength": 1,
@@ -12869,8 +13647,14 @@
                           "description": "What the eval covers and why it exists, for whoever reads its verdict."
                         },
                         "region": {
-                          "description": "Managed datacenter. Managed only; omit for the default region.",
-                          "maxLength": 64,
+                          "description": "Managed datacenter. Managed only; omit it, or send \"\", for the default region.",
+                          "enum": [
+                            "eu-central-1",
+                            "us-east-1",
+                            "us-west-2",
+                            "ap-southeast-1",
+                            ""
+                          ],
                           "type": "string"
                         },
                         "validation_code": {
@@ -12966,7 +13750,16 @@
                             ]
                           },
                           "region": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "$ref": "#/components/schemas/ManagedRegion"
+                              },
+                              {
+                                "const": "",
+                                "type": "string"
+                              }
+                            ],
+                            "description": "The datacenter of a managed browser; \"\" for the default one."
                           },
                           "validation_code": {
                             "type": [
@@ -14160,8 +14953,20 @@
                     },
                     "type": "object"
                   },
+                  "profile_id": {
+                    "description": "The profile to use for a `loggedIn` script on a cloud browser. When you do not give it, the script uses your Auth session cookies that are in no profile.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
                   "region": {
                     "description": "The datacenter region of the managed browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
+                    "enum": [
+                      "eu-central-1",
+                      "us-east-1",
+                      "us-west-2",
+                      "ap-southeast-1"
+                    ],
                     "type": "string"
                   },
                   "version_id": {
@@ -15172,6 +15977,7 @@
                 "properties": {
                   "content": {
                     "description": "The code of the version: a module with a default export, `export default async ({ builtins, page, args, files, ai }) => { ... }`. The default export gets the scope, and the value that it returns is the result. Code without a default export cannot run.",
+                    "maxLength": 200000,
                     "minLength": 1,
                     "type": "string"
                   },
@@ -15503,7 +16309,7 @@
     },
     "/api/scripts/{handle}/{host}/{slug}/versions/{version_id}": {
       "delete": {
-        "description": "Discard a draft version.",
+        "description": "Discard a draft version. If it is the only version of the script, the script is deleted too.",
         "operationId": "deleteDraftScriptVersion",
         "parameters": [
           {
@@ -15888,6 +16694,7 @@
                 "properties": {
                   "content": {
                     "description": "The code of the version: a module with a default export, `export default async ({ builtins, page, args, files, ai }) => { ... }`. The default export gets the scope, and the value that it returns is the result. Code without a default export cannot run.",
+                    "maxLength": 200000,
                     "minLength": 1,
                     "type": "string"
                   },
@@ -16566,6 +17373,7 @@
                         "code": {
                           "enum": [
                             "unprocessable_content",
+                            "whoami_format",
                             "noncompliant",
                             "type_errors",
                             "eval_args_invalid",
