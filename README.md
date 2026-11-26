@@ -137,39 +137,25 @@ is only valid at the resource it names.
 | `baseUrl` | `https://reduck.ai` | The origin of the API. The paths include `/api`. |
 | `headers` | none                | More headers to send with each request.          |
 
-## API
+## What you can do
 
-Pass the returned `client` to any function. List endpoints return
-`{ data, has_next_page }` and take `query: { page?, page_size?, … }`; the rest take
-`path` and/or `body`.
+Pass the returned `client` to any function:
 
-| Function                    | Args (besides `client`)                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `runScript`                 | `path: { handle, host, slug }`, `body: { args?, browser?, … }`            |
-| `runScripts`                | `body: { scripts, … }`                                                    |
-| `getRun`                    | `path: { run_id }`                                                        |
-| `getRunTrace`               | `path: { run_id }`                                                        |
-| `listRuns`                  | `query: { page?, page_size? }`                                            |
-| `getMe`                     | none                                                                      |
-| `listDevices`               | none                                                                      |
-| `listAllScripts`            | `query: { host?, q?, visibility?, archived? }`                            |
-| `listScripts`               | `path: { handle }`, `query: { host?, slug?, visibility?, archived?, q? }` |
-| `getScript`                 | `path: { handle, host, slug }`                                            |
-| `createScript`              | `path: { handle }`, `body`                                                |
-| `patchScript`               | `path: { handle, host, slug }`, `body: { name?, description? }`           |
-| `publishScript`             | `path: { handle, host, slug }`                                            |
-| `unpublishScript`           | `path: { handle, host, slug }`                                            |
-| `archiveScript`             | `path: { handle, host, slug }`                                            |
-| `restoreScript`             | `path: { handle, host, slug }`                                            |
-| `listScriptVersions`        | `path: { handle, host, slug }`, `query`                                   |
-| `createDraftScriptVersion`  | `path: { handle, host, slug }`, `body`                                    |
-| `getScriptVersion`          | `path: { handle, host, slug, version_id }`                                |
-| `listScriptTransferTargets` | `path: { handle, host, slug }`                                            |
-| `transferScript`            | `path: { handle, host, slug }`, `body: { target }`                        |
+- **Run scripts**: `runScript`, and `runScripts` to run several scripts at once.
+- **Read runs**: `getRun`, `listRuns`, and `getRunTrace` for the steps of a run.
+- **Find scripts**: `listScripts`, `listAllScripts`, and `getScript` for the
+  inputs and output of a script.
+- **Write scripts**: `createScript`, and `createDraftScriptVersion` for a new
+  version.
+- **Your account and devices**: `getMe`, `listDevices`.
 
-`handle` is `@username` for a personal scope, a project slug, or `reduck` for the
-official scripts. The table shows the frequent functions. Your editor shows all of
-them, or see [openapi.json](https://reduck.ai/api/openapi.json).
+Each function is one endpoint of the
+[API reference](https://docs.reduck.ai/api-reference), and your editor shows its
+arguments. List functions return `{ data, has_next_page }` and take
+`query: { page?, page_size?, … }`.
+
+`handle` is `@username` for your own scripts, the handle of a project, or `reduck`
+for the official scripts.
 
 ## Errors
 
