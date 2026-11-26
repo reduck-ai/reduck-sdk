@@ -724,6 +724,46 @@
         ],
         "type": "object"
       },
+      "BrowserStat": {
+        "additionalProperties": false,
+        "description": "The finished runs of one script version on one browser.",
+        "properties": {
+          "browser": {
+            "$ref": "#/components/schemas/RunBrowser",
+            "description": "`extension` for your browser, `managed` for a cloud browser."
+          },
+          "country": {
+            "description": "The country of the residential proxy (ISO code, such as `US`). Empty when the cloud browser uses no proxy. Null when `region` is null.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "description": "The region of the cloud browser. Null for your browser, and for a run that failed before its cloud browser started.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "success": {
+            "description": "The runs that succeeded.",
+            "type": "number"
+          },
+          "total": {
+            "description": "The finished runs: success or error.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "browser",
+          "region",
+          "country",
+          "total",
+          "success"
+        ],
+        "type": "object"
+      },
       "ClientSurface": {
         "enum": [
           "cli",
@@ -1254,6 +1294,74 @@
         ],
         "type": "object"
       },
+      "DeviceMetrics": {
+        "additionalProperties": false,
+        "description": "What shared the device while the run ran.",
+        "properties": {
+          "batch": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "index": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "total": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "index",
+                  "total"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The place of the run in its batch, null for a run of one script."
+          },
+          "budget": {
+            "description": "The concurrency budget of the device when this run started on it.",
+            "type": "number"
+          },
+          "open_browsers": {
+            "description": "The most browsers kept open on the device at the same time during this run. They use no slot of the budget, and `peak` does not count them.",
+            "type": "number"
+          },
+          "overlapping": {
+            "description": "The other runs that held a slot on the device during this run, the first 20 by start.",
+            "items": {
+              "$ref": "#/components/schemas/OverlapRun"
+            },
+            "type": "array"
+          },
+          "peak": {
+            "description": "The most runs the device ran at the same time during this run, this one included.",
+            "type": "number"
+          },
+          "succeeded": {
+            "description": "The other runs on the device that succeeded during this run.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "peak",
+          "budget",
+          "open_browsers",
+          "succeeded",
+          "batch",
+          "overlapping"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "properties": {
           "code": {
@@ -1364,6 +1472,14 @@
         ],
         "type": "object"
       },
+      "EvalBrowser": {
+        "description": "Where an eval runs, in a run's words: your browser on a paired device, or a cloud browser. The database keeps its own value for a device, `extension`.",
+        "enum": [
+          "device",
+          "managed"
+        ],
+        "type": "string"
+      },
       "EvalOutcome": {
         "enum": [
           "infra",
@@ -1420,28 +1536,121 @@
           }
         ]
       },
-      "HostReadme": {
+      "ExecStep": {
         "additionalProperties": false,
+        "description": "One step of the code, as a run's trace records it.",
         "properties": {
-          "content": {
+          "args": {
+            "items": {},
+            "type": "array"
+          },
+          "error": {
             "type": "string"
           },
-          "created_at": {
+          "kind": {
+            "description": "`action` for a builtin that acts on the page, `recon` for one that reads it, `ai` for a model call.",
+            "enum": [
+              "action",
+              "recon",
+              "ai"
+            ],
             "type": "string"
           },
-          "host": {
+          "name": {
             "type": "string"
           },
-          "updated_at": {
-            "type": "string"
+          "parts": {
+            "description": "What the step shows: text, a screenshot (base64), or the HTML of the page (gzip, then base64).",
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "text",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "mediaType": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "image",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "data",
+                    "mediaType"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "const": "gzip",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "html",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "encoding",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "result": {},
+          "t0": {
+            "description": "When the step started and ended, in milliseconds since the epoch.",
+            "type": "number"
+          },
+          "t1": {
+            "type": "number"
           }
         },
         "required": [
-          "host",
-          "content",
-          "created_at",
-          "updated_at"
+          "kind",
+          "name",
+          "args",
+          "t0",
+          "t1",
+          "parts"
         ],
+        "type": "object"
+      },
+      "LibraryVersions": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "description": "A version of the shared code of each site, by site, for example `{ \"linkedin.com\": 3 }`.",
         "type": "object"
       },
       "ManagedQuota": {
@@ -1493,6 +1702,48 @@
           "proxy_mb",
           "runs",
           "period_end"
+        ],
+        "type": "object"
+      },
+      "OverlapRun": {
+        "additionalProperties": false,
+        "description": "Another run on the same device that held a slot while this run ran.",
+        "properties": {
+          "duration_seconds": {
+            "description": "Seconds the other run held its slot, up to the end of this run.",
+            "type": "number"
+          },
+          "error_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset_seconds": {
+            "description": "Seconds from this run's start to the other run's start on the device; negative when the other run started first.",
+            "type": "number"
+          },
+          "script": {
+            "description": "The site and the slug of its script, for example `linkedin.com/get_profile`. Null when its script is gone.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "Its status when this run was read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "script",
+          "status",
+          "error_type",
+          "offset_seconds",
+          "duration_seconds"
         ],
         "type": "object"
       },
@@ -1805,6 +2056,17 @@
           "id": {
             "type": "string"
           },
+          "libraries": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LibraryVersions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version of the shared code of each site that the run loaded, by site. Null when it loaded none."
+          },
           "name": {
             "type": "string"
           },
@@ -1891,6 +2153,7 @@
           "batch_id",
           "batch_index",
           "batch_total",
+          "libraries",
           "script"
         ],
         "type": "object"
@@ -2045,7 +2308,8 @@
             ]
           },
           "browser": {
-            "$ref": "#/components/schemas/RunBrowser"
+            "$ref": "#/components/schemas/EvalBrowser",
+            "description": "`device`: your browser on a paired device. `managed`: a cloud browser."
           },
           "country": {
             "type": "string"
@@ -2087,7 +2351,7 @@
                 "type": "string"
               }
             ],
-            "description": "The datacenter of a managed browser; \"\" for the default one."
+            "description": "The datacenter region of a cloud browser; \"\" for the default one."
           },
           "validation_code": {
             "type": [
@@ -6526,6 +6790,813 @@
         "summary": "List app updates"
       }
     },
+    "/api/browsers": {
+      "post": {
+        "description": "Open a browser that stays open between your requests: a cloud browser, or your own browser on a paired device. It closes after 15 minutes with no request. A cloud browser counts against your cloud browser time while it is open.",
+        "operationId": "openBrowser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "browser": {
+                    "description": "Where it runs: `managed` is a cloud browser, `device` is your own browser, through the Reduck extension. With `device` and no `device_id`, Reduck uses your one paired device, and refuses when you have more than one.",
+                    "enum": [
+                      "managed",
+                      "device"
+                    ],
+                    "type": "string"
+                  },
+                  "country": {
+                    "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the cloud browser connects to the sites, through a residential proxy.",
+                    "pattern": "^[A-Z]{2}$",
+                    "type": "string"
+                  },
+                  "device_id": {
+                    "description": "The paired device to run on. It is enough alone: you do not need to give `browser` with it.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "hosts": {
+                    "description": "The sites whose Auth session cookies the cloud browser loads when it opens, for example `linkedin.com`.",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "profile_id": {
+                    "description": "The profile that `hosts` loads the Auth session cookies from. When you do not give it, the browser loads your Auth session cookies that are in no profile.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "region": {
+                    "description": "The datacenter region of the cloud browser. Select the region nearest to the sites that you use.",
+                    "enum": [
+                      "eu-central-1",
+                      "us-east-1",
+                      "us-west-2",
+                      "ap-southeast-1"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "browser_id": {
+                      "description": "The ID of the browser, for the runs and the code that you send to it.",
+                      "type": "string"
+                    },
+                    "device_id": {
+                      "description": "The paired device the browser runs on; null for a cloud browser.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "region": {
+                      "description": "The datacenter region of a cloud browser.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "browser_id",
+                    "device_id"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is not valid. For example, a `region`, a `country` or `hosts` for a browser that is not `managed`, or no paired device to open it on."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Your plan has no managed browser time left, or no residential proxy for `country`. Or, your token does not hold \"device:read\", which a browser on a paired device needs."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The device or the profile does not exist, or you cannot use it."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            409
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "With the `device` browser, you have more than one paired device: give `device_id`. Or, the device cannot open a browser now: it is not connected."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            429
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "You have too many browsers open. Close one, then send the request again."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck did not get an answer in time. The browser can be open: it closes on its own when you send it no request."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            503
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck cannot open the browser now. Send the request again in a moment."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:write",
+              "script:read",
+              "profile"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Open browser"
+      }
+    },
+    "/api/browsers/{browser_id}": {
+      "delete": {
+        "description": "Close a browser that you opened. A cloud browser saves the cookies of its sites before it closes.",
+        "operationId": "closeBrowser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "browser_id",
+            "required": true,
+            "schema": {
+              "description": "The ID of a browser that you opened.",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No open browser has this ID: it closed already, or it is not yours."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck could not close the browser now. Send the request again in a moment."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            503
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck cannot close the browser now. Send the request again in a moment."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Close browser"
+      }
+    },
+    "/api/browsers/{browser_id}/exec": {
+      "post": {
+        "description": "Run code on the page of a browser that you opened, as it is. Use it to try code before you save it as a script.",
+        "operationId": "execBrowserCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "browser_id",
+            "required": true,
+            "schema": {
+              "description": "The ID of a browser that you opened.",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "args": {
+                    "additionalProperties": {},
+                    "description": "The arguments that the code gets.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "code": {
+                    "description": "The code to run, as the body of a script: a module whose default export is an async function. The function gets one object, with `page`, `builtins` and `args`, for example `export default async ({ page }) => page.title()`.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "handle": {
+                    "description": "The owner of the shared code that the code imports with `lib:<site>`. The default is your own handle.",
+                    "type": "string"
+                  },
+                  "language": {
+                    "description": "The language of the code. The default is `javascript`.",
+                    "enum": [
+                      "javascript",
+                      "typescript"
+                    ],
+                    "type": "string"
+                  },
+                  "libraries": {
+                    "additionalProperties": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "description": "A version of the shared code of a site to load in place of its live version, by site.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "timeout_seconds": {
+                    "default": 60,
+                    "description": "How many seconds the code can run, from 1 to 240. The default is 60. After this time, the answer comes back with the page as it is, and `error` tells that the time ended.",
+                    "maximum": 240,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "description": "Why the code failed, or that its time ended.",
+                      "type": "string"
+                    },
+                    "logs": {
+                      "description": "The console logs of the code.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "result": {
+                      "description": "What the code returned, when it did not fail."
+                    },
+                    "trace": {
+                      "items": {
+                        "$ref": "#/components/schemas/ExecStep"
+                      },
+                      "type": "array"
+                    },
+                    "url": {
+                      "description": "The address of the page when the code ended. Absent when no page is open.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "trace",
+                    "logs"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is not valid, or the code imports shared code that does not exist."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No open browser has this ID: it closed, or it is not yours."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            409
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The browser is busy with another request, or it closed while the code ran. Open a new browser, or wait for the other request to end."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck did not get an answer in time. The code can have run: look at the page before you send the code again."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            503
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck cannot run the code now. Send the request again in a moment."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:write",
+              "script:read",
+              "profile"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Exec browser code"
+      }
+    },
     "/api/connectors": {
       "get": {
         "description": "List your Auth session cookies, one entry for each website, without the cookies.",
@@ -9806,23 +10877,40 @@
                 "additionalProperties": false,
                 "properties": {
                   "browser": {
-                    "description": "Where the scripts run: `managed` is a browser that Reduck hosts, `extension` is your paired browser extension, `local` is your paired local device. The default is `managed`.",
+                    "description": "Where it runs: `managed` is a cloud browser, `device` is your own browser, through the Reduck extension. With `device` and no `device_id`, Reduck uses your one paired device, and refuses when you have more than one.",
                     "enum": [
                       "managed",
-                      "extension",
-                      "local"
+                      "device"
                     ],
                     "type": "string"
                   },
+                  "browser_id": {
+                    "description": "A browser that you opened with POST /api/browsers, to run the scripts in. The scripts see the page and the cookies that the browser has. Do not give `browser`, `device_id`, `region`, `country` or `profile_id` with it: the browser has its own.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
                   "country": {
-                    "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the managed browser connects to the site, through a residential proxy.",
+                    "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the cloud browser connects to the site, through a residential proxy.",
+                    "pattern": "^[A-Z]{2}$",
                     "type": "string"
                   },
                   "device_id": {
-                    "description": "The paired device to run on. Use it when you have more than one device.",
+                    "description": "The paired device to run on. It is enough alone: you do not need to give `browser` with it.",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
+                  },
+                  "libraries": {
+                    "additionalProperties": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "description": "A version of the shared code of a site to load in place of its live version, by site.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
                   },
                   "profile_id": {
                     "description": "The profile to use for a `loggedIn` script on a cloud browser. When you do not give it, the script uses your Auth session cookies that are in no profile.",
@@ -9831,7 +10919,7 @@
                     "type": "string"
                   },
                   "region": {
-                    "description": "The datacenter region of the managed browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
+                    "description": "The datacenter region of the cloud browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
                     "enum": [
                       "eu-central-1",
                       "us-east-1",
@@ -9855,23 +10943,56 @@
                         },
                         "files": {
                           "additionalProperties": {
-                            "additionalProperties": false,
-                            "properties": {
-                              "b64": {
-                                "description": "The bytes of the file, encoded in base64.",
-                                "type": "string"
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "b64": {
+                                    "description": "The bytes of the file, encoded in base64.",
+                                    "type": "string"
+                                  },
+                                  "mime": {
+                                    "description": "The media type of the file, e.g. \"application/pdf\".",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "b64"
+                                ],
+                                "type": "object"
                               },
-                              "mime": {
-                                "description": "The media type of the file, e.g. \"application/pdf\".",
-                                "type": "string"
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "relative_path": {
+                                    "description": "The name of a file in the Reduck folder on the Desktop of the device that runs the script. Only for a run on a paired device that has \"Allow access to file URLs\" on.",
+                                    "minLength": 1,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "relative_path"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "file_id": {
+                                    "description": "The `file_id` that POST /api/runs/files gave. Upload the bytes first. One run can use the file, once.",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "file_id"
+                                ],
+                                "type": "object"
                               }
-                            },
-                            "required": [
-                              "b64"
-                            ],
-                            "type": "object"
+                            ]
                           },
-                          "description": "The files of the script, by the name of each file input (an input-schema property with format \"file\"). The page gets the file with the name of the input, not the name of your file. The whole request must be smaller than 4.5 MB, so all the files of the request together can be approximately 3 MB.",
+                          "description": "The files of the script, by the name of each file input (an input-schema property with format \"file\"). The page gets the file with the name of the input, not the name of your file. Give a file as its bytes in base64 when the whole request stays smaller than 4.5 MB (all the files of the request together approximately 3 MB). Give a larger file, up to 50 MB, by the `file_id` of an upload (POST /api/runs/files).",
                           "propertyNames": {
                             "type": "string"
                           },
@@ -9983,7 +11104,7 @@
                 }
               }
             },
-            "description": "The request is not valid. For example, a `region` or a `country` for a browser that is not `managed`, or no paired device to run on."
+            "description": "The request is not valid. For example, no `browser` and no `browser_id`, a `region` or a `country` for a browser that is not `managed`, or no paired device to run on."
           },
           "401": {
             "content": {
@@ -10317,6 +11438,168 @@
         "summary": "Batch delete runs"
       }
     },
+    "/api/runs/files": {
+      "post": {
+        "description": "Get a URL to upload a file for a run, for a file too large to send in the run request itself.",
+        "operationId": "createRunFile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "mime": {
+                    "description": "The media type of the file, e.g. \"application/pdf\". The upload must send it as its Content-Type.",
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "The name of your file, for your own reference. The page gets the name of the input.",
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "size": {
+                    "description": "The size of the file, in bytes, at most 52428800 (50 MB). The upload must send exactly this many bytes.",
+                    "exclusiveMinimum": 0,
+                    "maximum": 52428800,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "name",
+                  "size",
+                  "mime"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "expires_at": {
+                      "description": "The time after which a run cannot use the file. One run can use the file, once. Reduck deletes the file after the run reads it.",
+                      "type": "string"
+                    },
+                    "file_id": {
+                      "description": "The id of the file. After the upload, give it in the run's `files`, as `{ \"file_id\": \"<file_id>\" }`.",
+                      "type": "string"
+                    },
+                    "upload_headers": {
+                      "$ref": "#/components/schemas/Recordstringstring",
+                      "description": "The headers that the PUT must send, exactly as given."
+                    },
+                    "upload_url": {
+                      "description": "Where to upload the bytes of the file, with a PUT, before `expires_at`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "file_id",
+                    "upload_url",
+                    "upload_headers",
+                    "expires_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is not valid. For example, a file larger than 50 MB."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:write"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Create run file"
+      }
+    },
     "/api/runs/{run_id}": {
       "delete": {
         "description": "Delete a finished run and the trace it recorded.",
@@ -10582,6 +11865,270 @@
         "summary": "Get run"
       }
     },
+    "/api/runs/{run_id}/logs": {
+      "get": {
+        "description": "Fetch the console logs of a run.",
+        "operationId": "getRunLogs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "logs": {
+                      "description": "The console logs of the run, one line each, or null when it has none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "logs"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such run on this account."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Get run logs"
+      }
+    },
+    "/api/runs/{run_id}/metrics": {
+      "get": {
+        "description": "Fetch how long a run waited for its device, and what else used that device while it ran.",
+        "operationId": "getRunMetrics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "device": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/DeviceMetrics"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "What shared the device while the run ran. Null for a run that ran on no device of its own: a run on a cloud browser, or in a browser that you opened."
+                    },
+                    "queued_seconds": {
+                      "description": "How many seconds the run waited for a free slot on its device. Null for a run that did not wait for a device: a run on a cloud browser, or in a browser that you opened.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "queued_seconds",
+                    "device"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such run on this account."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Get run metrics"
+      }
+    },
     "/api/runs/{run_id}/trace": {
       "get": {
         "description": "Fetch the trace a run recorded.",
@@ -10691,6 +12238,338 @@
           }
         ],
         "summary": "Get run trace"
+      }
+    },
+    "/api/runs/{run_id}/trace/exec": {
+      "post": {
+        "description": "Run code on the recording of a failed run, to find why it failed. The run does not run again.",
+        "operationId": "execRunTraceCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "args": {
+                    "additionalProperties": {},
+                    "description": "The arguments that the code gets.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "browser": {
+                    "description": "Where it runs: `managed` is a cloud browser, `device` is your own browser, through the Reduck extension. With `device` and no `device_id`, Reduck uses your one paired device, and refuses when you have more than one.",
+                    "enum": [
+                      "managed",
+                      "device"
+                    ],
+                    "type": "string"
+                  },
+                  "browser_id": {
+                    "description": "A browser that you opened, to show the recording in. When you do not give it, a browser opens for this call and closes after it: then give `browser` or `device_id`.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "description": "The code to run: a module whose default export is an async function. The function gets one object, with `page`, `builtins`, `args` and `trace`: the actions of the run, the requests of its pages, and `trace.open()`, which shows the page as it was before or after an action. A recorded page does not run its own scripts: read it, do not click it.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "device_id": {
+                    "description": "The paired device to run on. It is enough alone: you do not need to give `browser` with it.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "timeout_seconds": {
+                    "default": 60,
+                    "description": "How many seconds the code can run, from 1 to 240. The default is 60. After this time, the answer comes back with the page as it is, and `error` tells that the time ended.",
+                    "maximum": 240,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "description": "Why the code failed, or that its time ended.",
+                      "type": "string"
+                    },
+                    "logs": {
+                      "description": "The console logs of the code.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "result": {
+                      "description": "What the code returned, when it did not fail."
+                    },
+                    "trace": {
+                      "items": {
+                        "$ref": "#/components/schemas/ExecStep"
+                      },
+                      "type": "array"
+                    },
+                    "url": {
+                      "description": "The address of the page when the code ended. Absent when no page is open.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "trace",
+                    "logs"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            400
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request is not valid. For example, no `browser_id` and no `browser`, or `browser` with `browser_id`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The run is a run of a project's script, whose recording only the members of the project can read. Or, your plan has no managed browser time left. Or, your token does not hold \"device:read\", which a browser on a paired device needs."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "No such run on this account, the run kept no recording, or no open browser has this `browser_id`."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            409
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The run did not fail, so it kept no recording. Or, the browser is busy with another request, or it closed while the code ran. Or, with the `device` browser, you have more than one paired device: give `device_id`."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            429
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "You have too many browsers open. Close one, then send the request again."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck could not run the code now. Send the request again in a moment."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            503
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck cannot open recordings or a browser now. Send the request again in a moment."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "run:read",
+              "run:write",
+              "script:read",
+              "profile"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Exec run trace code"
       }
     },
     "/api/scripts": {
@@ -12496,433 +14375,6 @@
         "summary": "Promote script lib version"
       }
     },
-    "/api/scripts/{handle}/{host}/readme": {
-      "delete": {
-        "description": "Delete a host's README. The owner can, and so can a project member allowed to update its scripts.",
-        "operationId": "deleteHostReadme",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "handle",
-            "required": true,
-            "schema": {
-              "description": "The owner a resource is addressed under: \"@username\" for a personal scope, or a bare slug for a project.",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "host",
-            "required": true,
-            "schema": {
-              "description": "The site the script automates, as a hostname.",
-              "maxLength": 253,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not found"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "script:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Delete host readme"
-      },
-      "get": {
-        "description": "Read the README for a host: the notes an owner shares across every script they own for that site, like rate limits, login quirks, or ordering rules. Anyone can read it while that owner has a public, unarchived script on the host; otherwise only the owner, or a member of the project that owns it.",
-        "operationId": "getHostReadme",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "handle",
-            "required": true,
-            "schema": {
-              "description": "The owner a resource is addressed under: \"@username\" for a personal scope, or a bare slug for a project.",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "host",
-            "required": true,
-            "schema": {
-              "description": "The site the script automates, as a hostname.",
-              "maxLength": 253,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HostReadme"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not found"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "script:read"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Get host readme"
-      },
-      "put": {
-        "description": "Write the README for a host, the guidance shared across every script that owner has for the site. Calling it again replaces the previous text. The owner can, and so can a project member allowed to update its scripts.",
-        "operationId": "setHostReadme",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "handle",
-            "required": true,
-            "schema": {
-              "description": "The owner a resource is addressed under: \"@username\" for a personal scope, or a bare slug for a project.",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "host",
-            "required": true,
-            "schema": {
-              "description": "The site the script automates, as a hostname.",
-              "maxLength": 253,
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "content": {
-                    "maxLength": 20000,
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "content"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HostReadme"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            400
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            401
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not authenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            403
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "properties": {
-                        "status": {
-                          "enum": [
-                            404
-                          ]
-                        }
-                      },
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Not found"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": [
-              "script:write"
-            ]
-          },
-          {
-            "apiKey": []
-          }
-        ],
-        "summary": "Set host readme"
-      }
-    },
     "/api/scripts/{handle}/{host}/{slug}": {
       "get": {
         "description": "Read one script by its canonical identity, including the version it currently runs. A public script is readable by anyone, signed in or not; a private one only by its owner, or a member of the project that owns it.",
@@ -13395,6 +14847,172 @@
         "summary": "Archive script"
       }
     },
+    "/api/scripts/{handle}/{host}/{slug}/browser-stats": {
+      "get": {
+        "description": "Get the success rate of a script version on each browser: your browser, or a cloud browser in each region and country. Use it to choose where to run the script. All users' finished runs are counted.",
+        "operationId": "getScriptBrowserStats",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "version_id",
+            "required": false,
+            "schema": {
+              "description": "The version to get the success rate of. Omit it for the live version.",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "description": "The owner a resource is addressed under: \"@username\" for a personal scope, or a bare slug for a project.",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "host",
+            "required": true,
+            "schema": {
+              "description": "The site the script automates, as a hostname.",
+              "maxLength": 253,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "description": "The script's unique identifier within its host, unique per owner.",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "description": "One entry for each browser the version ran on. Empty when the version has no finished run.",
+                      "items": {
+                        "$ref": "#/components/schemas/BrowserStat"
+                      },
+                      "type": "array"
+                    },
+                    "version_id": {
+                      "description": "The version of the success rate. Null when you gave no `version_id` and the script has no live version.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "version_id",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            401
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not authenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            403
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            404
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [
+              "script:read"
+            ]
+          },
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Get script browser stats"
+      }
+    },
     "/api/scripts/{handle}/{host}/{slug}/evals": {
       "get": {
         "description": "List a script's evals, each with the verdict of its latest run, or of its latest run on `version_id`.",
@@ -13617,15 +15235,15 @@
                           "type": "object"
                         },
                         "browser": {
-                          "description": "Where the eval runs: `extension` (a paired device, the default) or `managed` (a Reduck managed browser).",
+                          "description": "Where the eval runs: `device` (your browser on a paired device, the default) or `managed` (a cloud browser).",
                           "enum": [
-                            "extension",
+                            "device",
                             "managed"
                           ],
                           "type": "string"
                         },
                         "country": {
-                          "description": "Managed egress country, ISO-3166 alpha-2. Managed only; omit for datacenter egress.",
+                          "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the cloud browser connects to the sites, through a residential proxy. Only with `managed`.",
                           "pattern": "^[A-Z]{2}$",
                           "type": "string"
                         },
@@ -13647,7 +15265,7 @@
                           "description": "What the eval covers and why it exists, for whoever reads its verdict."
                         },
                         "region": {
-                          "description": "Managed datacenter. Managed only; omit it, or send \"\", for the default region.",
+                          "description": "The datacenter region of the cloud browser. Only with `managed`: omit it, or send \"\", for the default region.",
                           "enum": [
                             "eu-central-1",
                             "us-east-1",
@@ -13714,7 +15332,8 @@
                             ]
                           },
                           "browser": {
-                            "$ref": "#/components/schemas/RunBrowser"
+                            "$ref": "#/components/schemas/EvalBrowser",
+                            "description": "`device`: your browser on a paired device. `managed`: a cloud browser."
                           },
                           "country": {
                             "type": "string"
@@ -13759,7 +15378,7 @@
                                 "type": "string"
                               }
                             ],
-                            "description": "The datacenter of a managed browser; \"\" for the default one."
+                            "description": "The datacenter region of a cloud browser; \"\" for the default one."
                           },
                           "validation_code": {
                             "type": [
@@ -14108,8 +15727,8 @@
     },
     "/api/scripts/{handle}/{host}/{slug}/evals/runs": {
       "post": {
-        "description": "Link runs to the evals they executed, with each verdict once the run has ended, so they count for a promote. Each run must be your own run of this script, on the eval's browser. The first verdict recorded for a run stays.",
-        "operationId": "recordScriptEvalRuns",
+        "description": "Run the evals of a script: a run for each eval, judged when it ends. An eval still running when the answer comes records its verdict when it ends. Each run counts against your plan.",
+        "operationId": "runScriptEvals",
         "parameters": [
           {
             "in": "path",
@@ -14149,63 +15768,38 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
-                  "batch_id": {
-                    "description": "The batch the runs were started in, when there is one.",
+                  "device_id": {
+                    "description": "The paired device for the evals that run on your browser. When you do not give it, Reduck uses one of your paired devices.",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   },
-                  "runs": {
+                  "eval_ids": {
+                    "description": "Only these active evals. When you do not give them, all the active evals run.",
                     "items": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "detail": {
-                          "anyOf": [
-                            {
-                              "maxLength": 10000,
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "Why it is not `pass`."
-                        },
-                        "eval_id": {
-                          "format": "uuid",
-                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                          "type": "string"
-                        },
-                        "outcome": {
-                          "description": "The verdict, once the run has ended. Omit it while the run is going.",
-                          "enum": [
-                            "infra",
-                            "pass",
-                            "script",
-                            "validation"
-                          ],
-                          "type": "string"
-                        },
-                        "run_id": {
-                          "format": "uuid",
-                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "eval_id",
-                        "run_id"
-                      ],
-                      "type": "object"
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
                     },
                     "maxItems": 100,
                     "minItems": 1,
                     "type": "array"
+                  },
+                  "version_id": {
+                    "description": "The version to test. When you do not give it, the live version is tested.",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "wait_seconds": {
+                    "default": 25,
+                    "description": "How many seconds the request waits for the evals to end, from 0 to 55. The default is 25. After this time, the request returns, and the evals continue and record their verdicts. Read them again with GET /api/scripts/{handle}/{host}/{slug}/evals.",
+                    "maximum": 55,
+                    "minimum": 0,
+                    "type": "number"
                   }
                 },
-                "required": [
-                  "runs"
-                ],
+                "required": [],
                 "type": "object"
               }
             }
@@ -14219,15 +15813,50 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
-                    "data": {
+                    "evals": {
+                      "description": "The evals that ran, with their verdicts. Empty when no eval ran.",
                       "items": {
                         "$ref": "#/components/schemas/ScriptEval"
                       },
                       "type": "array"
+                    },
+                    "not_started": {
+                      "description": "The evals that did not start, each with the reason.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "error": {
+                            "type": "string"
+                          },
+                          "eval_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "eval_id",
+                          "error"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "pending": {
+                      "description": "How many of these evals are still running.",
+                      "type": "number"
+                    },
+                    "version_id": {
+                      "description": "The version the evals ran on. Null when the script has no active eval.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "version_id",
+                    "evals",
+                    "pending",
+                    "not_started"
                   ],
                   "type": "object"
                 }
@@ -14257,7 +15886,7 @@
                 }
               }
             },
-            "description": "Invalid request"
+            "description": "The request is not valid. For example, an id that is not an active eval of this script, or a script with no live version and no `version_id`."
           },
           "401": {
             "content": {
@@ -14305,7 +15934,7 @@
                 }
               }
             },
-            "description": "You may not edit this script."
+            "description": "You may not edit this script, or your plan has no runs left."
           },
           "404": {
             "content": {
@@ -14329,20 +15958,47 @@
                 }
               }
             },
-            "description": "An id is not an eval of this script, or a run is not your run of it on the eval's browser."
+            "description": "The script or the version does not exist, or you cannot use it."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            502
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Reduck could not run the evals, or could not confirm that they started. Read the evals of the script before you run them again."
           }
         },
         "security": [
           {
             "bearerAuth": [
-              "script:write"
+              "script:read",
+              "run:write",
+              "script:write",
+              "profile"
             ]
           },
           {
             "apiKey": []
           }
         ],
-        "summary": "Record script eval runs"
+        "summary": "Run script evals"
       }
     },
     "/api/scripts/{handle}/{host}/{slug}/publish": {
@@ -14861,7 +16517,7 @@
         "summary": "List script runs"
       },
       "post": {
-        "description": "Run a script in a managed browser or in your own paired browser.",
+        "description": "Run a script on a cloud browser, on your own browser on a paired device, or in a browser that you opened.",
         "operationId": "runScript",
         "parameters": [
           {
@@ -14911,43 +16567,93 @@
                     "type": "object"
                   },
                   "browser": {
-                    "description": "Where the scripts run: `managed` is a browser that Reduck hosts, `extension` is your paired browser extension, `local` is your paired local device. The default is `managed`.",
+                    "description": "Where it runs: `managed` is a cloud browser, `device` is your own browser, through the Reduck extension. With `device` and no `device_id`, Reduck uses your one paired device, and refuses when you have more than one.",
                     "enum": [
                       "managed",
-                      "extension",
-                      "local"
+                      "device"
                     ],
                     "type": "string"
                   },
+                  "browser_id": {
+                    "description": "A browser that you opened with POST /api/browsers, to run the scripts in. The scripts see the page and the cookies that the browser has. Do not give `browser`, `device_id`, `region`, `country` or `profile_id` with it: the browser has its own.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
                   "country": {
-                    "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the managed browser connects to the site, through a residential proxy.",
+                    "description": "The ISO 3166 alpha-2 country code (for example \"FR\") from which the cloud browser connects to the site, through a residential proxy.",
+                    "pattern": "^[A-Z]{2}$",
                     "type": "string"
                   },
                   "device_id": {
-                    "description": "The paired device to run on. Use it when you have more than one device.",
+                    "description": "The paired device to run on. It is enough alone: you do not need to give `browser` with it.",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   },
                   "files": {
                     "additionalProperties": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "b64": {
-                          "description": "The bytes of the file, encoded in base64.",
-                          "type": "string"
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "b64": {
+                              "description": "The bytes of the file, encoded in base64.",
+                              "type": "string"
+                            },
+                            "mime": {
+                              "description": "The media type of the file, e.g. \"application/pdf\".",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "b64"
+                          ],
+                          "type": "object"
                         },
-                        "mime": {
-                          "description": "The media type of the file, e.g. \"application/pdf\".",
-                          "type": "string"
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "relative_path": {
+                              "description": "The name of a file in the Reduck folder on the Desktop of the device that runs the script. Only for a run on a paired device that has \"Allow access to file URLs\" on.",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "relative_path"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "file_id": {
+                              "description": "The `file_id` that POST /api/runs/files gave. Upload the bytes first. One run can use the file, once.",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "file_id"
+                          ],
+                          "type": "object"
                         }
-                      },
-                      "required": [
-                        "b64"
-                      ],
-                      "type": "object"
+                      ]
                     },
-                    "description": "The files of the script, by the name of each file input (an input-schema property with format \"file\"). The page gets the file with the name of the input, not the name of your file. The whole request must be smaller than 4.5 MB, so all the files of the request together can be approximately 3 MB.",
+                    "description": "The files of the script, by the name of each file input (an input-schema property with format \"file\"). The page gets the file with the name of the input, not the name of your file. Give a file as its bytes in base64 when the whole request stays smaller than 4.5 MB (all the files of the request together approximately 3 MB). Give a larger file, up to 50 MB, by the `file_id` of an upload (POST /api/runs/files).",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "libraries": {
+                    "additionalProperties": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "description": "A version of the shared code of a site to load in place of its live version, by site.",
                     "propertyNames": {
                       "type": "string"
                     },
@@ -14960,7 +16666,7 @@
                     "type": "string"
                   },
                   "region": {
-                    "description": "The datacenter region of the managed browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
+                    "description": "The datacenter region of the cloud browser. Select the region nearest to the site. If Reduck does not know the region, it refuses the request and gives the regions that it knows.",
                     "enum": [
                       "eu-central-1",
                       "us-east-1",
@@ -15023,7 +16729,7 @@
                 }
               }
             },
-            "description": "The request is not valid. For example, a `region` or a `country` for a browser that is not `managed`, or no paired device to run on."
+            "description": "The request is not valid. For example, no `browser` and no `browser_id`, a `region` or a `country` for a browser that is not `managed`, or no paired device to run on. When the arguments do not agree with the input schema of the script, the run fails and the answer gives its `run_id`."
           },
           "401": {
             "content": {
