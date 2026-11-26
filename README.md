@@ -6,47 +6,111 @@
 
 [![npm](https://img.shields.io/npm/v/@reduck-ai/sdk.svg?style=flat-square)](https://www.npmjs.com/package/@reduck-ai/sdk)
 
-TypeScript SDK for [Reduck](https://reduck.ai). Use it to manage your browser
-scripts, devices and runs from your code. Each function and type is generated
-from the [OpenAPI specification](https://reduck.ai/api/openapi.json) of reduck.ai.
+[Reduck](https://reduck.ai) automates websites that have no API, such as LinkedIn,
+Gmail, Google Maps or your own back office. Each automation is a **script**: a saved
+browser automation for one site, with typed inputs and output. Run a script and get
+its output as JSON, on a cloud browser that Reduck hosts or on your own browser.
 
-## Installation
+With this TypeScript SDK, your code can:
+
+- **Run scripts**: the official scripts that Reduck maintains, or your own scripts.
+- **Read runs**: the output, the error and the trace of each run.
+- **Manage scripts and devices**: create a script, change it, publish it, and list
+  the browsers that you paired.
+
+Each function and type is generated from the
+[OpenAPI specification](https://reduck.ai/api/openapi.json) of reduck.ai.
+
+## Quick start
+
+### 1. Install
 
 ```bash
 npm install @reduck-ai/sdk
 ```
 
-## Quick Start
+### 2. Get an API key
+
+[Sign up](https://reduck.ai/#signin), then create an API key at
+[reduck.ai/api-keys](https://reduck.ai/api-keys).
+
+```bash
+export REDUCK_API_KEY="<your-api-key>"
+```
+
+### 3. Run your first script
+
+This code runs `reduck/search.brave.com/search`, an official script, on a cloud
+browser:
 
 ```typescript
-import { createReduckClient, createScript, listScripts } from "@reduck-ai/sdk";
+import { createReduckClient, getRun, runScript } from "@reduck-ai/sdk";
 
 const client = createReduckClient({ apiKey: process.env.REDUCK_API_KEY! });
 
-// Every function takes { client, path?, query?, body? } and returns { data, error }.
-const { data: scripts } = await listScripts({
+const { data: run, error } = await runScript({
 	client,
-	path: { handle: "@username" },
-	query: { q: "linkedin" }
-});
-
-const { data: script, error } = await createScript({
-	client,
-	path: { handle: "@username" },
-	body: {
-		slug: "linkedin-jobs",
-		host: "linkedin.com",
-		description: "Pull job posts",
-		content: "await page.goto('https://linkedin.com/jobs')",
-		input_schema: {},
-		output_schema: {},
-		side_effects: "none"
-	}
+	path: { handle: "reduck", host: "search.brave.com", slug: "search" },
+	body: { browser: "managed", args: { query: "browser automation" } }
 });
 if (error) throw new Error(error.error);
+
+// The request waits up to 25 seconds (`wait_seconds`) for the run to end.
+// A longer run continues: read it again with getRun until it has a `finished_at`.
+let current = run;
+while (!current.finished_at) {
+	await new Promise((resolve) => setTimeout(resolve, 2000));
+	const next = await getRun({ client, path: { run_id: current.id } });
+	if (next.error) throw new Error(next.error.error);
+	current = next.data;
+}
+
+console.log(current.status, current.result);
 ```
 
-Inputs and responses are fully typed and autocomplete in your editor.
+Every function takes `{ client, path?, query?, body? }` and returns
+`{ data, error }`. Inputs and responses are fully typed and autocomplete in your
+editor.
+
+On success, `status` is `"success"` and `result` is `{ result: <the output> }`. On
+failure, `status` is `"error"` and `result` is `{ error: <message> }`;
+`error_type` tells what caused the failure, and `external_message` tells what you
+can do about it.
+
+`browser: "managed"` runs the script on a cloud browser. To run it on your own
+browser, where you are signed in to your sites, use `browser: "extension"`. Install the
+[Reduck extension](https://chromewebstore.google.com/detail/reduck/koccidjchcojlmgkdhibpgjbnhcoopio)
+and pair it with your account first.
+
+## Find a script
+
+The **official scripts** cover the sites that people automate most, such as
+Google, LinkedIn, Reddit, Gmail and Amazon. Reduck maintains them and repairs
+them when a site changes. They are under the handle `reduck`:
+
+```typescript
+const { data: scripts } = await listScripts({
+	client,
+	path: { handle: "reduck" },
+	query: { q: "linkedin" }
+});
+```
+
+Each script has an input schema and an output schema. Read them with `getScript`
+before you run it. You can also find the scripts at
+[reduck.ai/explore](https://reduck.ai/explore).
+
+When you develop, an AI agent can find scripts and try them for you. Connect your
+agent to the [Reduck MCP server](https://docs.reduck.ai/connect-your-agent),
+ask it to do your task, and it tells you which scripts it ran and with which
+inputs. Then put the same calls in your code.
+
+## Build your own scripts
+
+When no official script does what you need, an AI agent can build a script for
+you through the Reduck MCP server, and test it on the site. Your code then runs it
+like any other script, with your handle. See
+[Build your own scripts](https://docs.reduck.ai/#build-your-own-scripts).
 
 ## Authentication
 
@@ -68,41 +132,30 @@ is only valid at the resource it names.
 
 ## Options
 
-| Option    | Default             | Description                                       |
-| --------- | ------------------- | ------------------------------------------------- |
-| `baseUrl` | `https://reduck.ai` | The origin of the API. The paths include `/api`.  |
-| `headers` | none                | More headers to send with each request.           |
+| Option    | Default             | Description                                      |
+| --------- | ------------------- | ------------------------------------------------ |
+| `baseUrl` | `https://reduck.ai` | The origin of the API. The paths include `/api`. |
+| `headers` | none                | More headers to send with each request.          |
 
-## API
+## What you can do
 
-Pass the returned `client` to any function. List endpoints return
-`{ data, has_next_page }` and take `query: { page?, page_size?, … }`; the rest take
-`path` and/or `body`.
+Pass the returned `client` to any function:
 
-| Function                    | Args (besides `client`)                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `getMe`                     | none                                                                      |
-| `listDevices`               | none                                                                      |
-| `listRuns`                  | `query: { page?, page_size? }`                                            |
-| `getRun`                    | `path: { run_id }`                                                        |
-| `listAllScripts`            | `query: { host?, q?, visibility?, archived? }`                            |
-| `listScripts`               | `path: { handle }`, `query: { host?, slug?, visibility?, archived?, q? }` |
-| `getScript`                 | `path: { handle, host, slug }`                                            |
-| `createScript`              | `path: { handle }`, `body`                                                |
-| `patchScript`               | `path: { handle, host, slug }`, `body: { name?, description? }`           |
-| `publishScript`             | `path: { handle, host, slug }`                                            |
-| `unpublishScript`           | `path: { handle, host, slug }`                                            |
-| `archiveScript`             | `path: { handle, host, slug }`                                            |
-| `restoreScript`             | `path: { handle, host, slug }`                                            |
-| `listScriptVersions`        | `path: { handle, host, slug }`, `query`                                   |
-| `createDraftScriptVersion`  | `path: { handle, host, slug }`, `body`                                    |
-| `getScriptVersion`          | `path: { handle, host, slug, version_id }`                                |
-| `listScriptTransferTargets` | `path: { handle, host, slug }`                                            |
-| `transferScript`            | `path: { handle, host, slug }`, `body: { target }`                        |
+- **Run scripts**: `runScript`, and `runScripts` to run several scripts at once.
+- **Read runs**: `getRun`, `listRuns`, and `getRunTrace` for the steps of a run.
+- **Find scripts**: `listScripts`, `listAllScripts`, and `getScript` for the
+  inputs and output of a script.
+- **Write scripts**: `createScript`, and `createDraftScriptVersion` for a new
+  version.
+- **Your account and devices**: `getMe`, `listDevices`.
 
-`handle` is `@username` for a personal scope or a project slug. The table shows
-the frequent functions. Your editor shows all of them, or see
-[openapi.json](https://reduck.ai/api/openapi.json).
+Each function is one endpoint of the
+[API reference](https://docs.reduck.ai/api-reference), and your editor shows its
+arguments. List functions return `{ data, has_next_page }` and take
+`query: { page?, page_size?, … }`.
+
+`handle` is `@username` for your own scripts, the handle of a project, or `reduck`
+for the official scripts.
 
 ## Errors
 
@@ -130,6 +183,9 @@ if (error) {
 	return;
 }
 ```
+
+A run that fails is not an error of the request: the request succeeds, and the run
+has `status: "error"`.
 
 ## Versions
 
