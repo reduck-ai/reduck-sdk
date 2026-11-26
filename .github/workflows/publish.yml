@@ -1,14 +1,17 @@
-# Releases the package on every push to main that changes what it ships, and stages it on npm
-# under the tag `latest`, where a maintainer approves it before anyone can install it. The version
-# is never committed: npm and the tag v<version> hold it, and package.json keeps 0.0.0. It is the
-# last version (the highest of npm's and the tags'), increased: major when oasdiff finds a
-# breaking change between its spec and this one, or when it has no spec to compare with; minor
-# when the spec changed otherwise; patch for anything else. Run it by hand (Actions > Publish >
-# Run workflow) to choose the increment, for example a major version for a breaking change in
-# src/client.ts.
+# Releases the package on every push to main that changes what it ships, and publishes it on npm
+# under the tag `latest`. The version is never committed: npm and the tag v<version> hold it, and
+# package.json keeps 0.0.0. It is the last version (the highest of npm's and the tags'),
+# increased: major when oasdiff finds a breaking change between its spec and this one, or when it
+# has no spec to compare with; minor when the spec changed otherwise; patch for anything else. Run
+# it by hand (Actions > Publish > Run workflow) to choose the increment, for example a major
+# version for a breaking change in src/client.ts.
 #
 # npm trusts this workflow by its file name (Trusted Publishing, OIDC; no NPM_TOKEN): renaming
 # publish.yml stops publishing until the package's Trusted Publisher on npmjs.com is updated.
+#
+# No person approves a version: what guards the release is that only main can publish. main takes
+# changes through pull requests only (a ruleset of the repository), and the environment `npm`
+# accepts a deployment from main only.
 
 name: Publish
 
@@ -63,7 +66,6 @@ jobs:
         with:
           install: false
           node-version-file: false
-      # `npm stage` needs npm >= 11.15.0.
       - run: npm install -g npm@11.15.0
       - run: pnpm install --frozen-lockfile
 
@@ -74,9 +76,6 @@ jobs:
         run: |
           set -euo pipefail
           name=$(jq -r .name package.json)
-          # A staged version is not on npm until a maintainer approves it, but its tag exists: the
-          # last version is the highest of the two, so two releases waiting for approval never
-          # take the same number.
           current=$(npm view "$name" version)
           tagged=$(git tag -l 'v*' | sed 's/^v//' | { grep -v -- '-' || true; } | sort -V | tail -1)
           if [ -n "$tagged" ] && [ "$(printf '%s\n%s\n' "$current" "$tagged" | sort -V | tail -1)" = "$tagged" ]; then current=$tagged; fi
@@ -129,9 +128,8 @@ jobs:
         run: |
           set -euo pipefail
           npm version "$VERSION" --no-git-tag-version
-          npm stage publish --access public --provenance
+          npm publish --access public --provenance
           git tag "v$VERSION"
           git push origin "v$VERSION"
           gh release create "v$VERSION" --generate-notes --verify-tag
-          echo "::notice::v$VERSION is staged on npm: a maintainer approves it (npmjs.com, or npm stage approve) before anyone can install it."
 
