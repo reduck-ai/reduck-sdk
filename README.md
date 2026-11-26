@@ -51,7 +51,7 @@ const client = createReduckClient({ apiKey: process.env.REDUCK_API_KEY! });
 const { data: run, error } = await runScript({
 	client,
 	path: { handle: "reduck", host: "search.brave.com", slug: "search" },
-	body: { args: { query: "browser automation" } }
+	body: { browser: "managed", args: { query: "browser automation" } }
 });
 if (error) throw new Error(error.error);
 
@@ -77,8 +77,8 @@ failure, `status` is `"error"` and `result` is `{ error: <message> }`;
 `error_type` tells what caused the failure, and `external_message` tells what you
 can do about it.
 
-To run on your own browser, where you are signed in to your sites, add
-`browser: "extension"` to the body. Install the
+`browser: "managed"` runs the script on a cloud browser. To run it on your own
+browser, where you are signed in to your sites, use `browser: "extension"`. Install the
 [Reduck extension](https://chromewebstore.google.com/detail/reduck/koccidjchcojlmgkdhibpgjbnhcoopio)
 and pair it with your account first.
 
